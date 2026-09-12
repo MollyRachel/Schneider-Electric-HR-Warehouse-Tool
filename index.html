@@ -1,0 +1,928 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HR仓库礼品出入库工具</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:"PingFang SC","Microsoft YaHei","Helvetica Neue",Arial,sans-serif; background:#f0f2f5; color:#333; min-height:100vh; }
+
+/* Header */
+.header { background:linear-gradient(135deg,#1a5276 0%,#2980b9 100%); color:#fff; padding:20px 30px; }
+.header h1 { font-size:22px; font-weight:600; }
+.header .sub { font-size:13px; opacity:0.85; margin-top:4px; }
+
+/* Tabs */
+
+/* Category checkboxes in export */
+.cat-checkboxes { display:flex; flex-wrap:wrap; gap:12px; padding:6px 0; }
+.cat-checkboxes label { display:flex; align-items:center; gap:4px; font-size:13px; color:#555; cursor:pointer; }
+.cat-checkboxes input[type="checkbox"] { width:15px; height:15px; cursor:pointer; }
+
+/* Category tabs */
+.cat-tabs { display:flex; flex-wrap:wrap; gap:6px; background:#f7f9fc; padding:8px 30px; border-bottom:1px solid #e8e8e8; }
+.cat-tab { padding:7px 18px; border-radius:18px; cursor:pointer; font-size:15px; color:#666; background:transparent; border:1px solid transparent; transition:all 0.2s; user-select:none; }
+.cat-tab:hover { color:#1a5276; background:#e8f0f8; }
+.cat-tab.active { color:#fff; background:#1a5276; border-color:#1a5276; font-weight:600; }
+
+.tabs { display:flex; background:#fff; border-bottom:2px solid #e8e8e8; padding:0 20px; position:sticky; top:0; z-index:100; }
+.tab { padding:14px 24px; cursor:pointer; font-size:15px; color:#666; border-bottom:3px solid transparent; transition:all 0.2s; user-select:none; }
+.tab:hover { color:#1a5276; }
+.tab.active { color:#1a5276; border-bottom-color:#1a5276; font-weight:600; }
+
+/* Content */
+.content { padding:24px 30px; }
+.tab-content { display:none; }
+.tab-content.active { display:block; }
+
+/* Cards */
+.stats-row { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:16px; margin-bottom:24px; }
+.stat-card { background:#fff; border-radius:10px; padding:18px 20px; box-shadow:0 1px 4px rgba(0,0,0,0.06); }
+.stat-card .label { font-size:13px; color:#888; margin-bottom:6px; }
+.stat-card .value { font-size:28px; font-weight:700; color:#1a5276; }
+.stat-card .value.green { color:#27ae60; }
+.stat-card .value.orange { color:#e67e22; }
+.stat-card .value.red { color:#e74c3c; }
+
+/* Section */
+.section { background:#fff; border-radius:10px; padding:20px 24px; margin-bottom:20px; box-shadow:0 1px 4px rgba(0,0,0,0.06); }
+.section-title { font-size:16px; font-weight:600; color:#1a5276; margin-bottom:16px; padding-bottom:10px; border-bottom:2px solid #eaf2f8; display:flex; align-items:center; justify-content:space-between; }
+.section-title .badge { background:#1a5276; color:#fff; font-size:12px; padding:3px 10px; border-radius:12px; font-weight:400; }
+
+/* Table */
+.table-wrap { overflow-x:auto; }
+table { width:100%; border-collapse:collapse; font-size:13px; }
+th { background:#1a5276; color:#fff; padding:10px 8px; text-align:left; font-weight:500; white-space:nowrap; position:sticky; top:0; }
+td { padding:9px 8px; border-bottom:1px solid #eee; white-space:nowrap; }
+tr:nth-child(even) { background:#f8f9fb; }
+tr:hover { background:#eaf2f8; }
+.num { text-align:center; }
+.col-date { width:110px; min-width:110px; max-width:110px; }
+.diff-pos { color:#27ae60; font-weight:600; }
+.diff-neg { color:#e74c3c; font-weight:600; }
+.diff-zero { color:#999; }
+
+/* Claim detail */
+.claim-toggle { cursor:pointer; color:#2980b9; text-decoration:underline; font-size:12px; }
+.claim-detail { display:none; background:#f8f9fb; }
+.claim-detail.show { display:table-row; }
+.claim-detail > td { padding:10px 16px; font-size:12px; color:#555; }
+.claim-detail table { font-size:12px; }
+.claim-detail th { background:#5d6d7e; padding:6px 8px; }
+
+/* Filter bar */
+.filter-bar { display:flex; flex-wrap:wrap; gap:12px; align-items:flex-end; margin-bottom:16px; }
+.filter-group { display:flex; flex-direction:column; gap:4px; }
+.filter-group label { font-size:12px; color:#666; }
+.filter-group input, .filter-group select { padding:7px 10px; border:1px solid #d0d7de; border-radius:6px; font-size:13px; min-width:120px; }
+.filter-group input:focus, .filter-group select:focus { outline:none; border-color:#2980b9; }
+.range-inputs { display:flex; align-items:center; gap:4px; }
+.range-inputs input { width:80px; min-width:80px; }
+.range-inputs span { color:#999; }
+
+/* Buttons */
+.btn { padding:8px 18px; border:none; border-radius:6px; cursor:pointer; font-size:13px; transition:all 0.2s; }
+.btn-primary { background:#1a5276; color:#fff; }
+.btn-primary:hover { background:#154360; }
+.btn-success { background:#27ae60; color:#fff; }
+.btn-success:hover { background:#1e8449; }
+.btn-warning { background:#e67e22; color:#fff; }
+.btn-warning:hover { background:#ca6f1e; }
+.btn-secondary { background:#95a5a6; color:#fff; }
+.btn-secondary:hover { background:#7f8c8d; }
+.btn-lg { padding:12px 32px; font-size:15px; }
+
+/* Forms */
+.form-row { display:flex; flex-wrap:wrap; gap:16px; margin-bottom:16px; }
+.form-group { display:flex; flex-direction:column; gap:4px; flex:1; min-width:180px; }
+.form-group label { font-size:13px; color:#555; font-weight:500; }
+.form-group input, .form-group select, .form-group textarea { padding:9px 12px; border:1px solid #d0d7de; border-radius:6px; font-size:14px; }
+.form-group input:focus, .form-group select:focus { outline:none; border-color:#2980b9; box-shadow:0 0 0 3px rgba(41,128,185,0.1); }
+
+/* Modal */
+.modal-overlay { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000; justify-content:center; align-items:center; }
+.modal-overlay.show { display:flex; }
+.modal { background:#fff; border-radius:12px; padding:30px 36px; max-width:420px; text-align:center; box-shadow:0 10px 40px rgba(0,0,0,0.2); }
+.modal h3 { font-size:18px; color:#1a5276; margin-bottom:12px; }
+.modal p { font-size:14px; color:#666; margin-bottom:20px; line-height:1.6; }
+.modal-btns { display:flex; gap:12px; justify-content:center; }
+
+/* Toast */
+.toast { position:fixed; top:20px; right:20px; background:#27ae60; color:#fff; padding:12px 24px; border-radius:8px; font-size:14px; z-index:2000; opacity:0; transform:translateX(100%); transition:all 0.3s; }
+.toast.show { opacity:1; transform:translateX(0); }
+.toast.error { background:#e74c3c; }
+
+/* Empty */
+.empty { text-align:center; padding:40px; color:#999; font-size:14px; }
+
+/* Sub tabs in tab1 */
+.loc-tabs { display:flex; gap:8px; margin-bottom:16px; }
+.loc-tab { padding:8px 20px; border-radius:6px; cursor:pointer; font-size:14px; background:#eaf2f8; color:#1a5276; border:1px solid transparent; }
+.loc-tab.active { background:#1a5276; color:#fff; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>HR仓库礼品出入库工具</h1>
+  <div class="sub">仓库礼品管理 · 数据来源：仓库清单-2026最新-2.xlsx</div>
+</div>
+
+<div class="cat-tabs" id="catTabs">
+  <div class="cat-tab active" data-cat="礼品">礼品</div>
+  <div class="cat-tab" data-cat="办公用品">办公用品</div>
+  <div class="cat-tab" data-cat="道具">道具</div>
+  <div class="cat-tab" data-cat="员工服装">员工服装</div>
+  <div class="cat-tab" data-cat="定制服装">定制服装</div>
+  <div class="cat-tab" data-cat="荣誉相关">荣誉相关</div>
+</div>
+<div class="tabs">
+  <div class="tab active" data-tab="tab1">Overall总数</div>
+  <div class="tab" data-tab="tab2">筛选查询</div>
+  <div class="tab" data-tab="tab3">出入库窗口</div>
+  <div class="tab" data-tab="tab4">导出下载</div>
+</div>
+
+<div class="content">
+
+<!-- ============ TAB 1: Overall ============ -->
+<div class="tab-content active" id="tab1">
+  <div class="stats-row" id="statsRow"></div>
+  <div class="loc-tabs">
+    <div class="loc-tab active" data-loc="all" onclick="switchLocTab(this,'all')">全部</div>
+    <div class="loc-tab" data-loc="一厂" onclick="switchLocTab(this,'一厂')">一厂</div>
+    <div class="loc-tab" data-loc="三厂" onclick="switchLocTab(this,'三厂')">三厂</div>
+  </div>
+  <div class="section">
+    <div class="section-title">
+      <span id="tab1Title">仓库商品清单</span>
+      <span class="badge" id="tab1Count">0</span>
+    </div>
+    <div class="table-wrap">
+      <table id="tab1Table">
+        <thead><tr>
+          <th>商品名称</th><th>位置</th><th>初始数量</th><th>补货</th><th class="col-date">补货时间</th><th>领取数量</th><th>最新剩余数量</th><th>价格</th><th>盘点与表差额</th><th>领取明细</th>
+        </tr></thead>
+        <tbody id="tab1Body"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ============ TAB 2: Filter ============ -->
+<div class="tab-content" id="tab2">
+  <div class="section">
+    <div class="section-title"><span>筛选条件</span></div>
+    <div class="filter-bar">
+      <div class="filter-group">
+        <label>商品名称</label>
+        <input type="text" id="f_name" placeholder="搜索商品名...">
+      </div>
+      <div class="filter-group">
+        <label>位置分组</label>
+        <select id="f_group"><option value="">全部</option><option value="一厂">一厂</option><option value="三厂">三厂</option></select>
+      </div>
+      <div class="filter-group">
+        <label>具体位置</label>
+        <select id="f_location"><option value="">全部</option></select>
+      </div>
+      <div class="filter-group">
+        <label>价格区间</label>
+        <div class="range-inputs"><input type="number" id="f_pmin" placeholder="最低"><span>~</span><input type="number" id="f_pmax" placeholder="最高"></div>
+      </div>
+      <div class="filter-group">
+        <label>剩余数量</label>
+        <div class="range-inputs"><input type="number" id="f_rmin" placeholder="最小"><span>~</span><input type="number" id="f_rmax" placeholder="最大"></div>
+      </div>
+      <button class="btn btn-primary" onclick="applyFilter()">筛选</button>
+      <button class="btn btn-secondary" onclick="resetFilter()">重置</button>
+    </div>
+  </div>
+  <div class="section">
+    <div class="section-title"><span>筛选结果</span><span class="badge" id="f_count">0</span></div>
+    <div class="table-wrap">
+      <table id="filterTable">
+        <thead><tr>
+          <th>商品名称</th><th>位置分组</th><th>具体位置</th><th>初始数量</th><th>补货</th><th class="col-date">补货时间</th><th>领取数量</th><th>最新剩余数量</th><th>价格</th><th>盘点与表差额</th><th>领取明细</th>
+        </tr></thead>
+        <tbody id="filterBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ============ TAB 3: In/Out ============ -->
+<div class="tab-content" id="tab3">
+  <div class="section">
+    <div class="section-title"><span>补货登记</span></div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>搜索商品</label>
+        <input type="text" id="r_search" placeholder="输入商品名搜索..." oninput="filterProductSelect('r')">
+      </div>
+      <div class="form-group">
+        <label>选择商品</label>
+        <select id="r_product"></select>
+      </div>
+      <div class="form-group">
+        <label>补货数量</label>
+        <input type="number" id="r_qty" min="1" placeholder="输入补货数量">
+      </div>
+      <div class="form-group">
+        <label>补货时间</label>
+        <input type="text" id="r_date" placeholder="xxxx/xx/xx" maxlength="10">
+      </div>
+      <div class="form-group" style="flex:none;">
+        <label>&nbsp;</label>
+        <button class="btn btn-success" onclick="doRestock()">确认补货</button>
+      </div>
+    </div>
+    <div id="r_info" style="font-size:13px;color:#666;padding:8px 0;"></div>
+  </div>
+
+  <div class="section">
+    <div class="section-title"><span>出库登记（领取）</span></div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>搜索商品</label>
+        <input type="text" id="o_search" placeholder="输入商品名搜索..." oninput="filterProductSelect('o')">
+      </div>
+      <div class="form-group">
+        <label>选择商品</label>
+        <select id="o_product"></select>
+      </div>
+      <div class="form-group">
+        <label>领取数量</label>
+        <input type="number" id="o_qty" min="1" placeholder="输入领取数量">
+      </div>
+      <div class="form-group">
+        <label>领取人</label>
+        <input type="text" id="o_claimer" placeholder="领取人姓名">
+      </div>
+      <div class="form-group">
+        <label>用途</label>
+        <input type="text" id="o_purpose" placeholder="用途/事由">
+      </div>
+      <div class="form-group">
+        <label>时间</label>
+        <input type="text" id="o_date" placeholder="xxxx/xx/xx" maxlength="10">
+      </div>
+      <div class="form-group" style="flex:none;">
+        <label>&nbsp;</label>
+        <button class="btn btn-warning" onclick="doClaim()">确认出库</button>
+      </div>
+    </div>
+    <div id="o_info" style="font-size:13px;color:#666;padding:8px 0;"></div>
+  </div>
+
+  <div class="section">
+    <div class="section-title"><span>操作日志</span><button class="btn btn-secondary" style="font-size:12px;padding:5px 12px;" onclick="clearLog()">清空日志</button></div>
+    <div id="logList" style="font-size:13px;color:#555;max-height:300px;overflow-y:auto;"></div>
+  </div>
+</div>
+
+<!-- ============ TAB 4: Export ============ -->
+<div class="tab-content" id="tab4">
+  <div class="section">
+    <div class="section-title"><span>导出筛选条件</span></div>
+    <div class="filter-bar">
+      <div class="filter-group" style="flex:1 1 100%;">
+        <label>导出品类（可多选）</label>
+        <div class="cat-checkboxes" id="e_categories">
+          <label>礼品 <input type="checkbox" value="礼品" checked onchange="onExportCategoryChange()"></label>
+          <label>办公用品 <input type="checkbox" value="办公用品" onchange="onExportCategoryChange()"></label>
+          <label>道具 <input type="checkbox" value="道具" onchange="onExportCategoryChange()"></label>
+          <label>员工服装 <input type="checkbox" value="员工服装" onchange="onExportCategoryChange()"></label>
+          <label>定制服装 <input type="checkbox" value="定制服装" onchange="onExportCategoryChange()"></label>
+          <label>荣誉相关 <input type="checkbox" value="荣誉相关" onchange="onExportCategoryChange()"></label>
+        </div>
+      </div>
+      <div class="filter-group">
+        <label>商品名称</label>
+        <input type="text" id="e_name" placeholder="搜索商品名...">
+      </div>
+      <div class="filter-group">
+        <label>位置分组</label>
+        <select id="e_group"><option value="">全部</option><option value="一厂">一厂</option><option value="三厂">三厂</option></select>
+      </div>
+      <div class="filter-group">
+        <label>具体位置</label>
+        <select id="e_location"><option value="">全部</option></select>
+      </div>
+      <div class="filter-group">
+        <label>价格区间</label>
+        <div class="range-inputs"><input type="number" id="e_pmin" placeholder="最低"><span>~</span><input type="number" id="e_pmax" placeholder="最高"></div>
+      </div>
+      <div class="filter-group">
+        <label>剩余数量</label>
+        <div class="range-inputs"><input type="number" id="e_rmin" placeholder="最小"><span>~</span><input type="number" id="e_rmax" placeholder="最大"></div>
+      </div>
+      <button class="btn btn-primary" onclick="previewExport()">预览筛选结果</button>
+      <button class="btn btn-secondary" onclick="clearExportSelection()">清空勾选</button>
+    </div>
+  </div>
+  <div class="section">
+    <div class="section-title"><span>待导出数据预览</span><span style="display:flex;align-items:center;gap:10px;"><button class="btn btn-secondary" style="padding:4px 12px;font-size:12px;" id="toggleSelectedBtn" onclick="toggleShowSelected()">仅看勾选</button><span class="badge" id="e_count">0</span></span></div>
+    <div class="table-wrap" style="max-height:400px;overflow-y:auto;">
+      <table id="exportTable">
+        <thead><tr>
+          <th style="width:36px;"><input type="checkbox" id="exportSelectAll" onchange="toggleSelectAllExport(this)"></th><th>品类</th><th>商品名称</th><th>位置分组</th><th>具体位置</th><th>初始数量</th><th>补货</th><th class="col-date">补货时间</th><th>领取数量</th><th>最新剩余数量</th><th>价格</th><th>盘点与表差额</th>
+        </tr></thead>
+        <tbody id="exportBody"></tbody>
+      </table>
+    </div>
+    <div style="text-align:center;margin-top:20px;">
+      <button class="btn btn-primary btn-lg" onclick="showExportModal()">下载Excel导出</button>
+    </div>
+  </div>
+</div>
+
+</div>
+
+<!-- Export Permission Modal -->
+<div class="modal-overlay" id="exportModal">
+  <div class="modal">
+    <h3>权限申请提示</h3>
+    <p>请联系HR部门发送邮件，以申请使用权限。</p>
+    <div class="modal-btns">
+      <button class="btn btn-secondary" onclick="closeModal()">取消</button>
+      <button class="btn btn-primary" onclick="confirmExport()">确认，继续导出</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ============ DATA ============
+const ALL_DATA = {"礼品":[{"name":"乐扣密封罐","location":"食堂10号柜","initial_qty":0,"restock":0,"remaining_qty":0,"restock_time":"","restock_qty":0,"claimed_qty":1,"price":"","count_qty":4,"diff":33,"claims":[{"qty":1,"purpose":"","claimer":"丁亚辰","time":"2023.05.26"},{"qty":10,"purpose":"SMT TB","claimer":"Vivien","time":"2023.5.15"},{"qty":18,"purpose":"家庭日志愿者礼物","claimer":"丁亚辰","time":"2023.7.28"},{"qty":9,"purpose":"教师节礼品","claimer":"丁亚辰","time":"2023.9.8"},{"qty":1,"purpose":"团建游戏奖品","claimer":"Stephanie","time":"2023.12.14"},{"qty":15,"purpose":"礼品","claimer":"Stephanie","time":"2024.1.4"},{"qty":6,"purpose":"销售给予客户","claimer":"杨振","time":"2024.1.8"},{"qty":2,"purpose":"礼品","claimer":"Stephanie","time":"2024.3.1"},{"qty":11,"purpose":"礼品","claimer":"Stephanie","time":"2024.3.12"},{"qty":5,"purpose":"催化型领导力活动（备注：Tina ZHANG）","claimer":"","time":"2025.9.25"}],"location_group":"一厂"},{"name":"灰色电脑包","location":"HRS","initial_qty":0,"restock":0,"remaining_qty":0,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":4,"diff":13,"claims":[{"qty":1,"purpose":"to zhangping","claimer":"邹小姣","time":"2023.03.17"},{"qty":8,"purpose":"SMT TB","claimer":"Vivien","time":"2023.5.15"},{"qty":2,"purpose":"","claimer":"赵晨龙","time":"2023.5.30"},{"qty":2,"purpose":"townhall礼品","claimer":"丁亚辰","time":"2023.6.15"},{"qty":2,"purpose":"家庭日志愿者礼物","claimer":"丁亚辰","time":"2023.9.11"},{"qty":1,"purpose":"to：刘康宁","claimer":"丁亚辰","time":"2023.9.12"},{"qty":15,"purpose":"礼品","claimer":"Stephanie","time":"2024.1.4"},{"qty":11,"purpose":"礼品","claimer":"Stephanie","time":"2024.3.12"},{"qty":1,"purpose":"","claimer":"","time":""},{"qty":1,"purpose":"厂务实习生（备注：顾娉瑜）","claimer":"","time":"2026.1.7"}],"location_group":"一厂"},{"name":"纽曼三脚架","location":"HRS","initial_qty":4,"restock":0,"remaining_qty":4,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":0,"diff":29,"claims":[{"qty":15,"purpose":"国庆中秋摄影大赛","claimer":"丁亚辰","time":"2023.10.20"},{"qty":11,"purpose":"","claimer":"林静","time":"2023.10.26"}],"location_group":"一厂"},{"name":"WPF 拓蓝定制洗漱包套装","location":"HRS","initial_qty":6,"restock":0,"remaining_qty":6,"restock_time":"","restock_qty":0,"claimed_qty":7,"price":"","count_qty":6,"diff":11,"claims":[{"qty":7,"purpose":"DVC career week","claimer":"杜雨浓","time":"2023.12.12"},{"qty":3,"purpose":"教师节礼品","claimer":"丁亚辰","time":"2023.9.8"},{"qty":1,"purpose":"教师节认可活动","claimer":"Sarah","time":"2025.9.10"}],"location_group":"一厂"},{"name":"红色电脑包","location":"二楼仓库","initial_qty":0,"restock":0,"remaining_qty":0,"restock_time":"","restock_qty":0,"claimed_qty":4,"price":"","count_qty":0,"diff":0,"claims":[{"qty":4,"purpose":"工会","claimer":"文巍","time":"2024.4.19"}],"location_group":"一厂"},{"name":"SWD 拓蓝定制洗漱包套装","location":"HRS","initial_qty":5,"restock":0,"remaining_qty":5,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":5,"diff":0,"claims":[],"location_group":"一厂"},{"name":"施耐德插电式红外感应地脚灯镜瓷白","location":"HRS","initial_qty":5,"restock":0,"remaining_qty":5,"restock_time":"","restock_qty":0,"claimed_qty":2,"price":"","count_qty":4,"diff":-23,"claims":[{"qty":2,"purpose":"内部礼品","claimer":"张晓晟","time":"2025.8.14"},{"qty":1,"purpose":"厂务实习生","claimer":"顾娉瑜","time":"20261.7"},{"qty":2,"purpose":"内部礼品（备注：张晓晟）","claimer":"","time":"2025.8.14"}],"location_group":"一厂"},{"name":"云米电热杯","location":"二楼仓库","initial_qty":0,"restock":0,"remaining_qty":0,"restock_time":"","restock_qty":0,"claimed_qty":18,"price":"","count_qty":0,"diff":0,"claims":[{"qty":18,"purpose":"to：Sarah","claimer":"张铭哲","time":"2023.7.6"}],"location_group":"一厂"},{"name":"乐扣炫彩嘟嘟杯","location":"办公室密码柜","initial_qty":0,"restock":10,"remaining_qty":0,"restock_time":"2023.6.8","restock_qty":10,"claimed_qty":1,"price":"","count_qty":0,"diff":-1,"claims":[{"qty":1,"purpose":"","claimer":"赵晨龙","time":"2023.03.23"},{"qty":8,"purpose":"内推礼品","claimer":"邹小姣","time":"2023.04.25"},{"qty":1,"purpose":"新员工午餐会","claimer":"","time":""},{"qty":2,"purpose":"新员工午餐会","claimer":"丁亚辰","time":"2023.7.21"},{"qty":3,"purpose":"MM部门优秀项目奖励","claimer":"李子涵","time":"2023.11.1"},{"qty":4,"purpose":"教师节礼品","claimer":"丁亚辰","time":"2023.9.8"},{"qty":1,"purpose":"教师节认可活动","claimer":"Sarah","time":"2025.9.10"},{"qty":1,"purpose":"","claimer":"","time":""}],"location_group":"一厂"},{"name":"施耐德定制潜水料单肩包","location":"HRS","initial_qty":48,"restock":0,"remaining_qty":28,"restock_time":"2025.2.27","restock_qty":0,"claimed_qty":2,"price":"","count_qty":0,"diff":0,"claims":[{"qty":2,"purpose":"给TA","claimer":"Sarah","time":"2025.9.25"},{"qty":1,"purpose":"内推礼品","claimer":"邹小姣","time":"2023.04.25"},{"qty":1,"purpose":"新员工午餐会","claimer":"丁亚辰","time":"2023.7.21"},{"qty":4,"purpose":"教师节礼品","claimer":"丁亚辰","time":"2023.9.8"},{"qty":1,"purpose":"SWD Planning Workshop","claimer":"Lydia Lin","time":"2025.8.21"},{"qty":20,"purpose":"转移去三厂","claimer":"Claire","time":"2026.8.21"},{"qty":2,"purpose":"给TA（备注：Sarah）","claimer":"","time":"2025.9.25"},{"qty":3,"purpose":"To 三位实习生（备注：Sarah）","claimer":"","time":"2026.8.28"}],"location_group":"一厂"},{"name":"黑色多功能旅行袋","location":"HRS","initial_qty":30,"restock":0,"remaining_qty":30,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":0,"diff":0,"claims":[{"qty":5,"purpose":"","claimer":"赵晨龙","time":"2023.05.16"},{"qty":24,"purpose":"补townhall礼品","claimer":"丁亚辰","time":"2023.7.11"},{"qty":4,"purpose":"","claimer":"Nora","time":"2023.11.14"}],"location_group":"一厂"},{"name":"诗薇德保鲜盒绿","location":"HR-C","initial_qty":5,"restock":0,"remaining_qty":5,"restock_time":"","restock_qty":0,"claimed_qty":2,"price":"","count_qty":8,"diff":14,"claims":[{"qty":2,"purpose":"WPF focus group","claimer":"刘野","time":"2024.12.27"}],"location_group":"一厂"},{"name":"诗薇德保鲜盒绿","location":"食堂11柜","initial_qty":3,"restock":0,"remaining_qty":3,"restock_time":"2023.5.29","restock_qty":5,"claimed_qty":5,"price":"","count_qty":0,"diff":0,"claims":[{"qty":5,"purpose":"","claimer":"赵晨龙","time":"2023.05.16"},{"qty":4,"purpose":"","claimer":"Nora","time":"2023.11.14"},{"qty":1,"purpose":"WPF FA认可","claimer":"Rachel","time":"2026.1.5"}],"location_group":"一厂"},{"name":"膳魔师真空保温杯","location":"二楼仓库","initial_qty":0,"restock":7,"remaining_qty":0,"restock_time":"2022.04.06","restock_qty":5,"claimed_qty":2,"price":"","count_qty":0,"diff":0,"claims":[{"qty":2,"purpose":"","claimer":"数字化项目","time":"2023.02.27"},{"qty":2,"purpose":"","claimer":"张晓晟","time":"2023.04.25"},{"qty":4,"purpose":"","claimer":"丁亚辰","time":"2023.06.07"},{"qty":1,"purpose":"to：Sarah","claimer":"张铭哲","time":"2023.7.6"}],"location_group":"一厂"},{"name":"白色包","location":"食堂10柜","initial_qty":2,"restock":0,"remaining_qty":2,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":0,"diff":0,"claims":[],"location_group":"一厂"},{"name":"白色包","location":"食堂10柜","initial_qty":2,"restock":0,"remaining_qty":2,"restock_time":"","restock_qty":0,"claimed_qty":3,"price":"","count_qty":0,"diff":0,"claims":[{"qty":3,"purpose":"graduates kickoff","claimer":"stephanie","time":"2023.12.06"},{"qty":1,"purpose":"王聪、彩虹月","claimer":"Sarah","time":"2024.7.16"}],"location_group":"一厂"},{"name":"灯塔1","location":"HR-C","initial_qty":1,"restock":1,"remaining_qty":1,"restock_time":"2023.8.26","restock_qty":1,"claimed_qty":0,"price":20.34,"count_qty":9,"diff":31,"claims":[],"location_group":"一厂"},{"name":"灯塔1","location":"食堂10号柜","initial_qty":4,"restock":0,"remaining_qty":4,"restock_time":"","restock_qty":0,"claimed_qty":4,"price":20.34,"count_qty":0,"diff":0,"claims":[{"qty":4,"purpose":"agile","claimer":"Stephanie","time":"2023.11.1"}],"location_group":"一厂"},{"name":"灯塔1","location":"食堂11号柜","initial_qty":3,"restock":0,"remaining_qty":3,"restock_time":"","restock_qty":0,"claimed_qty":20,"price":20.34,"count_qty":0,"diff":0,"claims":[{"qty":20,"purpose":"团建游戏奖品","claimer":"Stephanie","time":""}],"location_group":"一厂"},{"name":"灯塔1","location":"食堂12号柜","initial_qty":1,"restock":0,"remaining_qty":1,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":20.34,"count_qty":0,"diff":0,"claims":[],"location_group":"一厂"},{"name":"施耐德定制帆布袋","location":"HR-C","initial_qty":0,"restock":0,"remaining_qty":0,"restock_time":"2025.9.29","restock_qty":0,"claimed_qty":20,"price":20.01,"count_qty":0,"diff":0,"claims":[{"qty":20,"purpose":"2025年秋季校招","claimer":"Sarah","time":"2025.10.17"},{"qty":20,"purpose":"","claimer":"","time":""},{"qty":1,"purpose":"备注：Sarah","claimer":"","time":"2025.10.20"}],"location_group":"一厂"},{"name":"施耐德定制帆布袋","location":"密码柜","initial_qty":0,"restock":0,"remaining_qty":0,"restock_time":"","restock_qty":0,"claimed_qty":5,"price":20.01,"count_qty":0,"diff":0,"claims":[{"qty":5,"purpose":"催化型领导力活动","claimer":"Tina ZHANG","time":"2025.9.25"},{"qty":20,"purpose":"","claimer":"","time":""},{"qty":1,"purpose":"备注：Sarah","claimer":"","time":"2025.10.20"}],"location_group":"一厂"},{"name":"臻品毛巾2件套","location":"食堂11号柜","initial_qty":8,"restock":0,"remaining_qty":8,"restock_time":"","restock_qty":0,"claimed_qty":5,"price":"","count_qty":8,"diff":4,"claims":[{"qty":5,"purpose":"to：Owen 范","claimer":"丁亚辰","time":"2023.8.8"},{"qty":3,"purpose":"WPF FA 年度会议","claimer":"xuyongxiang","time":"2023.12.21"},{"qty":4,"purpose":"dlp workshop","claimer":"石勇","time":"2023.12.21"},{"qty":30,"purpose":"奖品","claimer":"stephanie","time":"2024.1.4"},{"qty":4,"purpose":"SWD Planning workshop","claimer":"Lydia Lin","time":"2025.8.12"},{"qty":4,"purpose":"","claimer":"","time":""}],"location_group":"一厂"},{"name":"Oral B电动牙刷","location":"食堂11号柜","initial_qty":0,"restock":0,"remaining_qty":0,"restock_time":"","restock_qty":0,"claimed_qty":2,"price":"","count_qty":0,"diff":0,"claims":[{"qty":2,"purpose":"MM部门优秀项目奖励","claimer":"李子涵","time":"2023.11.1"},{"qty":1,"purpose":"WPF FA年度会议","claimer":"xuyongxiang","time":"2023.12.21"},{"qty":1,"purpose":"strategy meeting","claimer":"leo yan","time":"2025.1.9"},{"qty":1,"purpose":"","claimer":"","time":""}],"location_group":"一厂"},{"name":"小米吹风机","location":"食堂11号柜","initial_qty":0,"restock":0,"remaining_qty":0,"restock_time":"","restock_qty":0,"claimed_qty":3,"price":"","count_qty":0,"diff":0,"claims":[{"qty":3,"purpose":"家庭日志愿者礼品","claimer":"Rachel","time":"2025.8.15"},{"qty":1,"purpose":"教师节认可活动","claimer":"Sarah","time":"2025.9.10"},{"qty":3,"purpose":"家庭日志愿者礼品（备注：Rachel）","claimer":"","time":"2025.8.15"}],"location_group":"一厂"},{"name":"Neverfull","location":"HR-C","initial_qty":0,"restock":35,"remaining_qty":0,"restock_time":"2024.1.5","restock_qty":35,"claimed_qty":1,"price":"","count_qty":0,"diff":-63,"claims":[{"qty":1,"purpose":"to zhangping","claimer":"邹小姣","time":"2023.03.17"},{"qty":1,"purpose":"digital L4 to：yaofeifei","claimer":"丁亚辰","time":"2023.6.26"},{"qty":17,"purpose":"库存纠正","claimer":"丁亚辰","time":"2023.7.12"},{"qty":1,"purpose":"to：阿玉姐","claimer":"丁亚辰","time":"2023.8.1"},{"qty":10,"purpose":"教师节礼品","claimer":"丁亚辰","time":"2023.9.8"}],"location_group":"一厂"},{"name":"地球包","location":"HR-C","initial_qty":0,"restock":0,"remaining_qty":0,"restock_time":"","restock_qty":0,"claimed_qty":1,"price":"","count_qty":0,"diff":-38,"claims":[{"qty":1,"purpose":"","claimer":"EHSBP","time":"2023.03.08"},{"qty":1,"purpose":"","claimer":"丁亚辰","time":"2023.05.26"}],"location_group":"一厂"},{"name":"蕉下5折伞","location":"食堂12号柜","initial_qty":0,"restock":0,"remaining_qty":0,"restock_time":"","restock_qty":0,"claimed_qty":2,"price":"","count_qty":14,"diff":14,"claims":[{"qty":2,"purpose":"审核老师","claimer":"Vivien","time":"2023.5.12"},{"qty":6,"purpose":"教师节礼品","claimer":"丁亚辰","time":"2023.9.8"}],"location_group":"一厂"},{"name":"黑白配色小挎包","location":"HR-C","initial_qty":0,"restock":0,"remaining_qty":0,"restock_time":"","restock_qty":0,"claimed_qty":1,"price":"","count_qty":8,"diff":-23,"claims":[{"qty":1,"purpose":"to zhangping","claimer":"邹小姣","time":"2023.03.17"},{"qty":1,"purpose":"","claimer":"丁亚辰","time":"2023.05.22"},{"qty":1,"purpose":"","claimer":"丁亚辰","time":"2023.05.26"},{"qty":2,"purpose":"townhall","claimer":"丁亚辰","time":"2023.10.12"}],"location_group":"一厂"},{"name":"杜邦纸双肩包","location":"HR-C","initial_qty":0,"restock":0,"remaining_qty":0,"restock_time":"","restock_qty":0,"claimed_qty":1,"price":"","count_qty":0,"diff":17,"claims":[{"qty":1,"purpose":"to zhangping","claimer":"邹小姣","time":"2023.03.17"},{"qty":6,"purpose":"towanhall最佳师傅","claimer":"","time":""},{"qty":15,"purpose":"无锡管理层workshop","claimer":"Sarah","time":"2025.9.15"},{"qty":1,"purpose":"","claimer":"","time":""}],"location_group":"一厂"},{"name":"洗洁精（小瓶)1","location":"食堂10、12号柜","initial_qty":0,"restock":0,"remaining_qty":0,"restock_time":"","restock_qty":0,"claimed_qty":48,"price":"","count_qty":0,"diff":0,"claims":[{"qty":48,"purpose":"SPS竞赛奖品","claimer":"丁亚辰","time":"2023.8.8"},{"qty":40,"purpose":"SPS竞赛奖品","claimer":"丁亚辰","time":"2023.8.10"}],"location_group":"一厂"},{"name":"洗洁精（小瓶)2","location":"二楼仓库","initial_qty":0,"restock":0,"remaining_qty":0,"restock_time":"","restock_qty":0,"claimed_qty":3,"price":"","count_qty":0,"diff":0,"claims":[{"qty":3,"purpose":"公共洗洁精","claimer":"丁亚辰","time":"2023.6.8"},{"qty":15,"purpose":"SPS竞赛奖品","claimer":"丁亚辰","time":"2023.8.10"}],"location_group":"一厂"},{"name":"洗洁精（大瓶)","location":"二楼仓库","initial_qty":0,"restock":159,"remaining_qty":0,"restock_time":"2023.7.12","restock_qty":133,"claimed_qty":41,"price":"","count_qty":0,"diff":0,"claims":[{"qty":41,"purpose":"SPS竞赛奖品","claimer":"丁亚辰","time":"2023.7.28"},{"qty":100,"purpose":"SPS竞赛奖品","claimer":"丁亚辰","time":"2023.8.10"},{"qty":26,"purpose":"礼品","claimer":"Stephanie","time":"2024.1.4"}],"location_group":"一厂"},{"name":"滴露消毒液","location":"二楼仓库","initial_qty":0,"restock":4,"remaining_qty":0,"restock_time":"2024.1.5","restock_qty":4,"claimed_qty":13,"price":"","count_qty":0,"diff":0,"claims":[{"qty":13,"purpose":"礼品","claimer":"Stephanie","time":"2024.1.4"},{"qty":4,"purpose":"过期","claimer":"","time":""}],"location_group":"一厂"},{"name":"百洁布","location":"二楼仓库","initial_qty":0,"restock":0,"remaining_qty":0,"restock_time":"","restock_qty":0,"claimed_qty":60,"price":"","count_qty":0,"diff":0,"claims":[{"qty":60,"purpose":"SPS竞赛奖品","claimer":"丁亚辰","time":"2023.7.28"},{"qty":99,"purpose":"SPS竞赛奖品","claimer":"丁亚辰","time":"2023.8.8"}],"location_group":"一厂"},{"name":"手持电风扇","location":"行政仓库","initial_qty":0,"restock":0,"remaining_qty":0,"restock_time":"","restock_qty":0,"claimed_qty":1,"price":"","count_qty":0,"diff":0,"claims":[{"qty":1,"purpose":"to：张晓晟","claimer":"丁亚辰","time":"2023.6.26"},{"qty":2,"purpose":"to：Jason Lou","claimer":"丁亚辰","time":"2023.7.26"},{"qty":13,"purpose":"to：owen 范","claimer":"丁亚辰","time":"2023.8.8"},{"qty":11,"purpose":"礼品","claimer":"Stephanie","time":"2024.1.4"}],"location_group":"一厂"},{"name":"集线器","location":"办公室密码柜","initial_qty":0,"restock":0,"remaining_qty":0,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":3,"diff":0,"claims":[],"location_group":"一厂"},{"name":"卡通钥匙扣","location":"二楼仓库","initial_qty":0,"restock":0,"remaining_qty":0,"restock_time":"","restock_qty":0,"claimed_qty":50,"price":"","count_qty":0,"diff":0,"claims":[{"qty":50,"purpose":"礼品","claimer":"Stephanie","time":"2024.1.4"}],"location_group":"一厂"},{"name":"小夜灯","location":"办公室密码柜","initial_qty":0,"restock":0,"remaining_qty":0,"restock_time":"","restock_qty":0,"claimed_qty":4,"price":"","count_qty":0,"diff":0,"claims":[{"qty":4,"purpose":"礼品","claimer":"Stephanie","time":"2024.09.12"}],"location_group":"一厂"},{"name":"转换插头","location":"办公室密码柜","initial_qty":0,"restock":0,"remaining_qty":0,"restock_time":"","restock_qty":0,"claimed_qty":1,"price":"","count_qty":4,"diff":-1,"claims":[{"qty":1,"purpose":"","claimer":"丁亚辰","time":"2023.06.07"},{"qty":1,"purpose":"ForCQC审核","claimer":"Sunny王","time":"2025.08.06"},{"qty":1,"purpose":"","claimer":"","time":""}],"location_group":"一厂"},{"name":"黑色背包","location":"HR-C","initial_qty":4,"restock":0,"remaining_qty":4,"restock_time":"","restock_qty":0,"claimed_qty":1,"price":"","count_qty":4,"diff":5,"claims":[{"qty":1,"purpose":"WPF FA认可","claimer":"Rachel","time":"2026.1.5"},{"qty":3,"purpose":"DE奖品","claimer":"","time":"5.3"},{"qty":1,"purpose":"赵辉到访，Stephanie领取","claimer":"","time":"7.5"},{"qty":1,"purpose":"专家认可8.13","claimer":"","time":"2025.8.13"}],"location_group":"一厂"},{"name":"洁丽雅毛巾1","location":"食堂10号柜","initial_qty":30,"restock":4,"remaining_qty":30,"restock_time":"2023.8.26","restock_qty":4,"claimed_qty":0,"price":"","count_qty":16,"diff":-16,"claims":[],"location_group":"一厂"},{"name":"潮流随身杯（李忻吟）","location":"食堂11号柜","initial_qty":26,"restock":13,"remaining_qty":26,"restock_time":"2023.8.26","restock_qty":13,"claimed_qty":11,"price":"","count_qty":49,"diff":0,"claims":[{"qty":11,"purpose":"SWD WC TB","claimer":"Sarah","time":"2024.5.19"}],"location_group":"一厂"},{"name":"水杯（李忻吟）","location":"食堂12号柜","initial_qty":0,"restock":0,"remaining_qty":0,"restock_time":"","restock_qty":0,"claimed_qty":13,"price":"","count_qty":0,"diff":13,"claims":[{"qty":13,"purpose":"补到11号柜","claimer":"丁亚辰","time":"2023.8.26"},{"qty":13,"purpose":"合规培训","claimer":"张仲继","time":"2026.7.30"},{"qty":11,"purpose":"SWD WC TB","claimer":"","time":"5.19"}],"location_group":"一厂"},{"name":"三合一无线充","location":"HR-C","initial_qty":0,"restock":0,"remaining_qty":0,"restock_time":"","restock_qty":0,"claimed_qty":1,"price":"","count_qty":0,"diff":-27,"claims":[{"qty":1,"purpose":"","claimer":"丁亚辰","time":"2023.05.26"}],"location_group":"一厂"},{"name":"乐途旅行五件套","location":"二楼仓库","initial_qty":8,"restock":0,"remaining_qty":8,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":8,"diff":4,"claims":[],"location_group":"一厂"},{"name":"液体加热器（花茶壶）","location":"HR-C","initial_qty":1,"restock":0,"remaining_qty":1,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":1,"diff":6,"claims":[{"qty":1,"purpose":"","claimer":"丁亚辰","time":"2023.05.22"},{"qty":5,"purpose":"接待外部PCBA访客","claimer":"Leo","time":"2024.11.12"}],"location_group":"一厂"},{"name":"苏泊尔电蒸锅","location":"二楼仓库","initial_qty":2,"restock":19,"remaining_qty":2,"restock_time":"2023.6.8","restock_qty":5,"claimed_qty":5,"price":"","count_qty":2,"diff":0,"claims":[{"qty":5,"purpose":"","claimer":"赵晨龙","time":"2023.5.30"},{"qty":2,"purpose":"townhall礼品","claimer":"丁亚辰","time":"2023.6.15"},{"qty":5,"purpose":"中秋国庆摄影大赛奖品","claimer":"丁亚辰","time":"2023.10.20"},{"qty":10,"purpose":"SPS精益关键知识点全员科普活动","claimer":"娄振强","time":"2025.06.18"},{"qty":10,"purpose":"","claimer":"","time":""},{"qty":1,"purpose":"汉江路H1 townhall（备注：Sarah）","claimer":"","time":"2026\\6\\12"}],"location_group":"一厂"},{"name":"派克钢笔","location":"HR-C","initial_qty":1,"restock":0,"remaining_qty":1,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":0,"diff":-1,"claims":[],"location_group":"一厂"},{"name":"泡泡马特马克杯","location":"HR-C","initial_qty":0,"restock":0,"remaining_qty":0,"restock_time":"","restock_qty":0,"claimed_qty":1,"price":"","count_qty":0,"diff":1,"claims":[{"qty":1,"purpose":"离职礼物","claimer":"shuangzhu","time":"2.28"},{"qty":1,"purpose":"graduates kickoff","claimer":"Stephanie","time":"2023.12.06"},{"qty":1,"purpose":"离职（备注：shuangzhu）","claimer":"","time":"2.28"}],"location_group":"一厂"},{"name":"晶华2024年金属手摇按压创意台历","location":"HR-C","initial_qty":0,"restock":0,"remaining_qty":0,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":0,"diff":-1,"claims":[],"location_group":"一厂"},{"name":"勒得利 哈利波特带灯款 手撕3d便签纸桌面摆件","location":"HR-C","initial_qty":0,"restock":0,"remaining_qty":0,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":0,"diff":-1,"claims":[],"location_group":"一厂"},{"name":"小米无线充电宝","location":"HR-C","initial_qty":1,"restock":0,"remaining_qty":1,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":1,"diff":0,"claims":[],"location_group":"一厂"},{"name":"界上双层商务出行洗漱包","location":"HR-C","initial_qty":0,"restock":0,"remaining_qty":0,"restock_time":"","restock_qty":0,"claimed_qty":15,"price":"","count_qty":0,"diff":15,"claims":[{"qty":15,"purpose":"SPS精益关键知识点全员科普活动","claimer":"娄振强","time":"2025.06.18"},{"qty":15,"purpose":"SPS精益关键知识点全员科普活动（备注：娄振强）","claimer":"","time":"2025/6/18"},{"qty":1,"purpose":"","claimer":"","time":""},{"qty":2,"purpose":"","claimer":"","time":"2025.11.14"},{"qty":7,"purpose":"","claimer":"","time":""}],"location_group":"一厂"},{"name":"现代多功能料理煲","location":"二楼仓库","initial_qty":0,"restock":0,"remaining_qty":0,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":0,"diff":-1,"claims":[],"location_group":"一厂"},{"name":"臂力器","location":"二楼仓库","initial_qty":0,"restock":0,"remaining_qty":0,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":0,"diff":-8,"claims":[],"location_group":"一厂"},{"name":"定制自动雨伞","location":"HR-C","initial_qty":0,"restock":0,"remaining_qty":0,"restock_time":"","restock_qty":0,"claimed_qty":5,"price":"","count_qty":2,"diff":-13,"claims":[{"qty":5,"purpose":"奖品","claimer":"Sarah","time":""},{"qty":7,"purpose":"","claimer":"","time":"8.5"},{"qty":1,"purpose":"送内部客户（备注：陆青青）","claimer":"","time":"2025/6/25"},{"qty":3,"purpose":"","claimer":"","time":"2025.11.15"},{"qty":5,"purpose":"SWD转正汇报认可（备注：Sarah）","claimer":"","time":"2026.1.20"}],"location_group":"一厂"},{"name":"洗手机洗手液套装2","location":"HR-C","initial_qty":0,"restock":0,"remaining_qty":0,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":0,"diff":-4,"claims":[],"location_group":"一厂"},{"name":"外交官双肩背包","location":"HR-C","initial_qty":0,"restock":0,"remaining_qty":0,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":0,"diff":-10,"claims":[],"location_group":"一厂"},{"name":"星巴克保温杯","location":"三厂仓库","initial_qty":2,"restock":0,"remaining_qty":2,"restock_time":"","restock_qty":0,"claimed_qty":1,"price":"","count_qty":2,"diff":2,"claims":[{"qty":1,"purpose":"","claimer":"stephanie","time":"4.25"},{"qty":1,"purpose":"Stephanie","claimer":"","time":"4.25"}],"location_group":"三厂"},{"name":"绿色鼠标垫","location":"HR-C","initial_qty":30,"restock":0,"remaining_qty":30,"restock_time":"","restock_qty":0,"claimed_qty":5,"price":"","count_qty":10,"diff":0,"claims":[{"qty":5,"purpose":"产线开放日","claimer":"Sarah","time":"2024.9.24"},{"qty":1,"purpose":"Rachel领取","claimer":"","time":"7.10"},{"qty":5,"purpose":"Sarah","claimer":"","time":"9.24"}],"location_group":"一厂"},{"name":"黑色POLO衫","location":"HR-C","initial_qty":0,"restock":0,"remaining_qty":0,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":0,"diff":3,"claims":[],"location_group":"一厂"},{"name":"施耐德定制蛋蛋包","location":"HR-C","initial_qty":0,"restock":0,"remaining_qty":0,"restock_time":"2025.9.15","restock_qty":0,"claimed_qty":15,"price":"","count_qty":0,"diff":0,"claims":[{"qty":15,"purpose":"无锡管理层workshop","claimer":"Sarah","time":"2025.9.15"},{"qty":15,"purpose":"无锡管理层workshop（备注：Sarah）","claimer":"","time":"2025.9.15"},{"qty":15,"purpose":"GSC HRC GIFT（备注：Rachel）","claimer":"","time":"2025.9.23"},{"qty":5,"purpose":"One Voice Workshop（备注：Rachel）","claimer":"","time":"2025.10.24"},{"qty":2,"purpose":"WUXI Site  Kaizen Week（备注：娄振强）","claimer":"","time":"2025.11.14"},{"qty":10,"purpose":"合规总结大会（备注：Jason）","claimer":"","time":"2025.12.19"},{"qty":1,"purpose":"备注：Sarah","claimer":"","time":"2026\\6\\12"}],"location_group":"一厂"},{"name":"K.S.小酷手持风扇","location":"HR-C","initial_qty":30,"restock":0,"remaining_qty":30,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":0,"diff":0,"claims":[],"location_group":"一厂"},{"name":"也仁黑色魔术贴50米","location":"HR-C","initial_qty":1,"restock":0,"remaining_qty":1,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":0,"diff":0,"claims":[],"location_group":"一厂"},{"name":"木色茶杯垫","location":"HR-C","initial_qty":12,"restock":0,"remaining_qty":12,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":0,"diff":0,"claims":[],"location_group":"一厂"},{"name":"唇膏","location":"办公室密码锁","initial_qty":0,"restock":0,"remaining_qty":0,"restock_time":"","restock_qty":0,"claimed_qty":2,"price":"","count_qty":0,"diff":-5,"claims":[{"qty":2,"purpose":"奖品","claimer":"stephanie","time":""},{"qty":5,"purpose":"过期","claimer":"","time":""}],"location_group":"一厂"},{"name":"洗手液","location":"办公室密码锁","initial_qty":0,"restock":0,"remaining_qty":0,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":0,"diff":-10,"claims":[],"location_group":"一厂"},{"name":"叶子形状胸针","location":"HR-C","initial_qty":13,"restock":0,"remaining_qty":13,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":0,"diff":0,"claims":[],"location_group":"一厂"},{"name":"凡士林","location":"二楼仓库","initial_qty":0,"restock":0,"remaining_qty":0,"restock_time":"","restock_qty":0,"claimed_qty":20,"price":"","count_qty":50,"diff":-12,"claims":[{"qty":20,"purpose":"妇女节礼品","claimer":"杜雨浓","time":"2024.3.7"},{"qty":38,"purpose":"Career Days Open Day","claimer":"Sarah","time":"2025.05.12"},{"qty":38,"purpose":"Career Days Open Day（备注：Sarah）","claimer":"","time":"2025/5/12"}],"location_group":"一厂"},{"name":"左点充气按摩枕","location":"HR-C","initial_qty":1,"restock":0,"remaining_qty":1,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":0,"diff":0,"claims":[{"qty":1,"purpose":"","claimer":"graduates kickoff","time":"2023.12.06"},{"qty":1,"purpose":"","claimer":"stephanie","time":"2024.4.26"},{"qty":1,"purpose":"工会","claimer":"文巍","time":""},{"qty":5,"purpose":"贵州交职院订单班入职仪式","claimer":"Rachel","time":"2024.7.15"},{"qty":9,"purpose":"无锡Young Talent 试用期答辩","claimer":"Rachel","time":"2024.11.12"},{"qty":3,"purpose":"WPF focus group","claimer":"刘野","time":"2024.12.27"},{"qty":6,"purpose":"贵州校招","claimer":"Rachel","time":"2025.3.12"},{"qty":10,"purpose":"订单班合作","claimer":"claire","time":"2025.06.09"},{"qty":3,"purpose":"徐州工程学院校企合作","claimer":"范伟","time":"2025.06.16"},{"qty":3,"purpose":"礼品","claimer":"Joy chen","time":"2025.7.10"},{"qty":7,"purpose":"SWD Planing","claimer":"Lydia Lin","time":"2025.8.21"},{"qty":20,"purpose":"2025年秋季校招","claimer":"Sarah","time":"2025.10.17"},{"qty":5,"purpose":"","claimer":"Sarah","time":"2025.10.20"},{"qty":10,"purpose":"","claimer":"","time":"7.1"},{"qty":3,"purpose":"","claimer":"","time":""},{"qty":1,"purpose":"TWI 培训老师Fiona答谢/Sarah（备注：培训讲师Fiona）","claimer":"","time":"11.1"},{"qty":1,"purpose":"王虹farewell礼物（备注：Sarah）","claimer":"","time":"2025/3/27"},{"qty":4,"purpose":"","claimer":"","time":""}],"location_group":"一厂"},{"name":"绿色圆形工牌套","location":"HR-C","initial_qty":30,"restock":0,"remaining_qty":15,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":0,"diff":0,"claims":[{"qty":1,"purpose":"礼品","claimer":"李月玲","time":"2024.4.28"},{"qty":3,"purpose":"礼品","claimer":"Joy Chen","time":"2025.7.10"},{"qty":1,"purpose":"杨嘉祺","claimer":"Stephanie","time":"2024.7.12"},{"qty":15,"purpose":"转移去三厂","claimer":"Claire","time":"2026.8.21"}],"location_group":"一厂"},{"name":"施耐德定制impact帆布袋","location":"HR-C","initial_qty":2,"restock":0,"remaining_qty":2,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":20.01,"count_qty":0,"diff":0,"claims":[{"qty":1,"purpose":"教师节认可活动","claimer":"Sarah","time":"2025.9.10"},{"qty":2,"purpose":"","claimer":"娄振强","time":"2025.11.14"},{"qty":7,"purpose":"合规总结大会","claimer":"Jason","time":""}],"location_group":"一厂"},{"name":"黑色背包","location":"HR-C","initial_qty":4,"restock":0,"remaining_qty":4,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":0,"diff":0,"claims":[{"qty":7,"purpose":"家庭日 志愿者礼品","claimer":"Sarah","time":""},{"qty":1,"purpose":"送内部客户","claimer":"陆青青","time":"2025.6.25"},{"qty":3,"purpose":"","claimer":"娄振强","time":"2025.11.14"},{"qty":5,"purpose":"","claimer":"Sarah","time":"2026.1.20"},{"qty":3,"purpose":"DE奖品","claimer":"","time":"5.3"},{"qty":1,"purpose":"赵辉到访，Stephanie领取","claimer":"","time":"7.5"},{"qty":1,"purpose":"专家认可8.13","claimer":"","time":"2025.8.13"}],"location_group":"一厂"},{"name":"蕉下口袋五折伞","location":"食堂10柜","initial_qty":14,"restock":0,"remaining_qty":14,"restock_time":"","restock_qty":0,"claimed_qty":6,"price":"","count_qty":14,"diff":0,"claims":[{"qty":6,"purpose":"CoMET L4认证礼品","claimer":"","time":"2024.6.26"},{"qty":6,"purpose":"CoMET L4认证礼品","claimer":"","time":"6.26"}],"location_group":"一厂"},{"name":"可口可乐揽萃保温杯","location":"二楼仓库","initial_qty":20,"restock":50,"remaining_qty":20,"restock_time":"","restock_qty":0,"claimed_qty":19,"price":"","count_qty":0,"diff":0,"claims":[{"qty":19,"purpose":"礼品","claimer":"stephanie","time":""},{"qty":7,"purpose":"","claimer":"","time":""},{"qty":1,"purpose":"","claimer":"","time":""},{"qty":2,"purpose":"","claimer":"","time":""},{"qty":6,"purpose":"","claimer":"","time":""},{"qty":3,"purpose":"","claimer":"","time":""},{"qty":1,"purpose":"实习生离职礼物（备注：Sarah）","claimer":"","time":"2026.1.23"}],"location_group":"一厂"},{"name":"可口可乐揽萃保温杯","location":"三厂仓库","initial_qty":10,"restock":0,"remaining_qty":10,"restock_time":"","restock_qty":0,"claimed_qty":7,"price":"","count_qty":0,"diff":0,"claims":[{"qty":7,"purpose":"strategy meeting","claimer":"leo yan","time":"2025.1.9"},{"qty":1,"purpose":"送内部客户","claimer":"陆青青","time":"2025.6.25"},{"qty":2,"purpose":"家庭日志愿者礼品","claimer":"Rachel","time":"2025.8.15"},{"qty":6,"purpose":"SWD Planning Workshop","claimer":"Lydia Lin","time":"2025.8.21"},{"qty":3,"purpose":"教师节认可活动","claimer":"Sarah","time":"2025.9.10"},{"qty":7,"purpose":"","claimer":"","time":""},{"qty":1,"purpose":"","claimer":"","time":""},{"qty":2,"purpose":"","claimer":"","time":""},{"qty":6,"purpose":"","claimer":"","time":""},{"qty":3,"purpose":"","claimer":"","time":""},{"qty":1,"purpose":"实习生离职礼物（备注：Sarah）","claimer":"","time":"2026.1.23"}],"location_group":"三厂"},{"name":"IPUDA自动洗手机套装","location":"食堂10号柜","initial_qty":2,"restock":0,"remaining_qty":2,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":6,"diff":4,"claims":[],"location_group":"一厂"},{"name":"IPUDA自动洗手机套装","location":"食堂12号柜","initial_qty":4,"restock":0,"remaining_qty":4,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":0,"diff":0,"claims":[],"location_group":"一厂"},{"name":"白色挎包（带子棕色皮质）","location":"HR-C","initial_qty":2,"restock":0,"remaining_qty":2,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":0,"diff":0,"claims":[],"location_group":"一厂"},{"name":"收纳七件套","location":"二楼仓库","initial_qty":0,"restock":30,"remaining_qty":0,"restock_time":"2024.4.19","restock_qty":30,"claimed_qty":12,"price":"","count_qty":0,"diff":-11,"claims":[{"qty":12,"purpose":"慰问未发津贴的员工","claimer":"stephanie","time":""},{"qty":1,"purpose":"员工慰问礼品（成健）","claimer":"Claire","time":""},{"qty":1,"purpose":"员工慰问礼品（代月月）","claimer":"Claire","time":""},{"qty":3,"purpose":"工会","claimer":"文巍","time":""},{"qty":2,"purpose":"Wira、陆华到访","claimer":"娄振强","time":"2024.7.2"},{"qty":2,"purpose":"经理生日（文巍、张娟）","claimer":"Sarah","time":"2024.7.9"},{"qty":4,"purpose":"8、9月经理生日(陆可展，周巍威，黄威，徐永军)","claimer":"","time":""},{"qty":6,"purpose":"WUXI Site Recognition 2025 Q1","claimer":"Rachel","time":"2025.4.17"},{"qty":5,"purpose":"2025家庭日志愿者礼品","claimer":"Rachel","time":"2025.8.15"},{"qty":3,"purpose":"教师节认可活动","claimer":"Rachel","time":"2025.9.10"},{"qty":2,"purpose":"","claimer":"","time":"7.2"},{"qty":2,"purpose":"经理生日(文巍、张娟)，Sarah领取","claimer":"","time":"7.9"},{"qty":4,"purpose":"8、9月经理生日","claimer":"","time":"9.11"},{"qty":6,"purpose":"WUXI Site Recognition 2025 Q1（备注：Rachel）","claimer":"","time":"2025/4/17"},{"qty":5,"purpose":"","claimer":"","time":""},{"qty":3,"purpose":"","claimer":"","time":""}],"location_group":"一厂"},{"name":"白色小包","location":"HR-C","initial_qty":8,"restock":0,"remaining_qty":8,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":0,"diff":0,"claims":[],"location_group":"一厂"},{"name":"黑色小包","location":"HR-C","initial_qty":1,"restock":0,"remaining_qty":1,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":0,"diff":0,"claims":[{"qty":6,"purpose":"2024 Q2 Townhall","claimer":"Rachel","time":"2024.8.23"},{"qty":1,"purpose":"张晴晴","claimer":"Rachel","time":"2024.8.23"},{"qty":6,"purpose":"WPF Lab(Service/FA) section annual meeting Recognition","claimer":"Rachel","time":"2024.12.25"}],"location_group":"一厂"},{"name":"和正悦己礼盒","location":"HR-B","initial_qty":1,"restock":0,"remaining_qty":1,"restock_time":"2026.3.3","restock_qty":0,"claimed_qty":0,"price":193.9,"count_qty":0,"diff":0,"claims":[{"qty":1,"purpose":"备注：Sarah","claimer":"","time":"2026\\6\\12"},{"qty":2,"purpose":"送审核老师（备注：Sarah）","claimer":"","time":"2026.8.18"},{"qty":4,"purpose":"Townhall认可","claimer":"","time":"5.8"},{"qty":12,"purpose":"Sarah","claimer":"","time":"5.23"},{"qty":2,"purpose":"EE cluster 业务&人才盘点会","claimer":"","time":"7.29"},{"qty":1,"purpose":"Leadership Training from Kaipeng Zong（备注：Rachel）","claimer":"","time":"2025/4/18"},{"qty":10,"purpose":"","claimer":"","time":""}],"location_group":"一厂"},{"name":"和正悦己礼盒","location":"食堂12号柜","initial_qty":3,"restock":0,"remaining_qty":3,"restock_time":"","restock_qty":0,"claimed_qty":4,"price":193.9,"count_qty":0,"diff":0,"claims":[{"qty":4,"purpose":"贝卡尔特参观","claimer":"王小龙","time":"2024.5.28"},{"qty":3,"purpose":"南理工学校老师","claimer":"Sarah","time":"2025.03.21"},{"qty":3,"purpose":"徐州工程学院校企合作","claimer":"范伟","time":"2025.06.16"},{"qty":1,"purpose":"校企合作（秦皇岛）","claimer":"Rachel","time":"2025.9.29"},{"qty":1,"purpose":"For CQC审核","claimer":"Sunny王","time":"2025.08.06"},{"qty":1,"purpose":"备注：Sarah","claimer":"","time":"2026\\6\\12"},{"qty":2,"purpose":"送审核老师（备注：Sarah）","claimer":"","time":"2026.8.18"},{"qty":4,"purpose":"Townhall认可","claimer":"","time":"5.8"},{"qty":12,"purpose":"Sarah","claimer":"","time":"5.23"},{"qty":2,"purpose":"EE cluster 业务&人才盘点会","claimer":"","time":"7.29"},{"qty":1,"purpose":"Leadership Training from Kaipeng Zong（备注：Rachel）","claimer":"","time":"2025/4/18"},{"qty":10,"purpose":"","claimer":"","time":""}],"location_group":"一厂"},{"name":"SWD 三折商务黑胶防紫外线伞（印刷）","location":"HR-B","initial_qty":4,"restock":0,"remaining_qty":4,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":0,"diff":0,"claims":[],"location_group":"一厂"},{"name":"SWD 三折商务黑胶防紫外线伞（印刷）","location":"三厂仓库","initial_qty":10,"restock":0,"remaining_qty":10,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":0,"diff":0,"claims":[],"location_group":"三厂"},{"name":"乐扣乐扣鲜享密封罐五件套","location":"二楼仓库","initial_qty":4,"restock":0,"remaining_qty":4,"restock_time":"","restock_qty":0,"claimed_qty":50,"price":"","count_qty":3,"diff":-3,"claims":[{"qty":50,"purpose":"2024教师节(发了43有7个放2楼仓库)","claimer":"Rachel","time":"2024.9.10"},{"qty":60,"purpose":"WUXI Site Recognition 2025 Q1","claimer":"Rachel","time":"2025.4.17"},{"qty":43,"purpose":"","claimer":"","time":""},{"qty":60,"purpose":"","claimer":"","time":""},{"qty":5,"purpose":"拜访客户（备注：Rachel）","claimer":"","time":"2026.4.4"},{"qty":6,"purpose":"校企合作项目礼品（备注：Rachel）","claimer":"","time":"2026\\6\\11"}],"location_group":"一厂"},{"name":"定制尚语全自动雨伞","location":"行政仓库","initial_qty":0,"restock":0,"remaining_qty":0,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":39,"diff":-1,"claims":[],"location_group":"一厂"},{"name":"牛奶保温杯","location":"HR-B","initial_qty":0,"restock":10,"remaining_qty":0,"restock_time":"2023.6.8","restock_qty":10,"claimed_qty":13,"price":"","count_qty":3,"diff":12,"claims":[{"qty":13,"purpose":"","claimer":"赵晨龙","time":"2023.04.19"},{"qty":5,"purpose":"","claimer":"柳博文","time":"2024.8.5"},{"qty":5,"purpose":"TWI培训","claimer":"Sarah","time":"2024.10.31"},{"qty":3,"purpose":"WPF focus group","claimer":"刘野","time":"2024.12.27"},{"qty":4,"purpose":"strategy meeting","claimer":"leo yan","time":"2025.1.9"},{"qty":1,"purpose":"孙香","claimer":"","time":"4.28"},{"qty":1,"purpose":"杨嘉祺,Stephanie领取","claimer":"","time":"7.12"},{"qty":3,"purpose":"礼品（备注：Joy Chen）","claimer":"","time":"2025.7.10"},{"qty":1,"purpose":"","claimer":"","time":""},{"qty":3,"purpose":"老师参访（备注：黄威）","claimer":"","time":"2026.2.2"}],"location_group":"一厂"},{"name":"施耐德定制清风盒抽纸巾","location":"二楼仓库","initial_qty":0,"restock":0,"remaining_qty":0,"restock_time":"","restock_qty":0,"claimed_qty":11,"price":22.8,"count_qty":0,"diff":-19,"claims":[{"qty":11,"purpose":"贵州交职院授课","claimer":"Rachel","time":"2024.6.17"},{"qty":11,"purpose":"贵州交职院授课，Rachel","claimer":"","time":"6.17"}],"location_group":"一厂"},{"name":"摩飞便携果汁机(李忻吟)","location":"HR-B","initial_qty":2,"restock":5,"remaining_qty":2,"restock_time":"2023.04.06","restock_qty":5,"claimed_qty":4,"price":"","count_qty":5,"diff":-1,"claims":[{"qty":4,"purpose":"","claimer":"数字化项目","time":"2023.02.27"}],"location_group":"一厂"},{"name":"Kolin便携式榨汁杯（李忻吟）","location":"二楼仓库","initial_qty":0,"restock":0,"remaining_qty":0,"restock_time":"","restock_qty":0,"claimed_qty":3,"price":"","count_qty":2,"diff":-3,"claims":[{"qty":3,"purpose":"教师节认可活动","claimer":"Sarah","time":"2025.9.10"},{"qty":3,"purpose":"","claimer":"","time":""},{"qty":5,"purpose":"备注：Tinna","claimer":"","time":"2026.4·28"}],"location_group":"一厂"},{"name":"三轴手持稳定器","location":"二楼仓库","initial_qty":0,"restock":0,"remaining_qty":0,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":0,"diff":-1,"claims":[],"location_group":"一厂"},{"name":"和正悦己礼盒","location":"三厂仓库","initial_qty":5,"restock":0,"remaining_qty":5,"restock_time":"","restock_qty":0,"claimed_qty":4,"price":193.9,"count_qty":5,"diff":-6,"claims":[{"qty":4,"purpose":"townhall礼品","claimer":"Sarah","time":"5.8"},{"qty":12,"purpose":"townhall礼品","claimer":"Sarah","time":"5.23"},{"qty":2,"purpose":"EE cluster 业务&人才盘点会","claimer":"Rachel","time":"7.29"},{"qty":1,"purpose":"Leadership Training from Kaipeng Zong","claimer":"Rachel","time":"2025.04.18"},{"qty":10,"purpose":"SPS精益关键知识点全员科普活动","claimer":"娄振强","time":"2025.06.18"},{"qty":2,"purpose":"送审核老师","claimer":"Sarah","time":"2026.8.18"},{"qty":1,"purpose":"备注：Sarah","claimer":"","time":"2026\\6\\12"},{"qty":2,"purpose":"送审核老师（备注：Sarah）","claimer":"","time":"2026.8.18"},{"qty":4,"purpose":"Townhall认可","claimer":"","time":"5.8"},{"qty":12,"purpose":"Sarah","claimer":"","time":"5.23"},{"qty":1,"purpose":"Leadership Training from Kaipeng Zong（备注：Rachel）","claimer":"","time":"2025/4/18"},{"qty":10,"purpose":"","claimer":"","time":""}],"location_group":"三厂"},{"name":"定制桌垫","location":"二楼仓库","initial_qty":0,"restock":0,"remaining_qty":0,"restock_time":"","restock_qty":0,"claimed_qty":46,"price":"","count_qty":0,"diff":-14,"claims":[{"qty":46,"purpose":"Career Days","claimer":"Sarah","time":"2024.5.13"},{"qty":46,"purpose":"Sarah","claimer":"","time":"5.13"}],"location_group":"一厂"},{"name":"摩飞电热杯","location":"HR-B","initial_qty":0,"restock":5,"remaining_qty":0,"restock_time":"2023.04.06","restock_qty":5,"claimed_qty":6,"price":"","count_qty":1,"diff":2,"claims":[{"qty":6,"purpose":"","claimer":"数字化项目","time":"2023.02.27"},{"qty":2,"purpose":"Wira、陆华到访，娄振强领取","claimer":"","time":"7.2"},{"qty":1,"purpose":"","claimer":"","time":""}],"location_group":"一厂"},{"name":"AI语音智能音箱套装","location":"HR-B","initial_qty":1,"restock":0,"remaining_qty":1,"restock_time":"","restock_qty":0,"claimed_qty":5,"price":"","count_qty":0,"diff":0,"claims":[{"qty":5,"purpose":"SMT TB","claimer":"Vivien","time":"2023.5.12"}],"location_group":"一厂"},{"name":"毛巾礼盒1","location":"HR-B","initial_qty":0,"restock":0,"remaining_qty":0,"restock_time":"","restock_qty":0,"claimed_qty":5,"price":"","count_qty":0,"diff":-21,"claims":[{"qty":5,"purpose":"SMT TB","claimer":"Vivien","time":"2023.5.15"},{"qty":8,"purpose":"工信局联络窗口（给外部）","claimer":"陈智青","time":"2024.12.9"},{"qty":3,"purpose":"徐州工程学院校企合作","claimer":"范伟","time":"2025.06.16"}],"location_group":"一厂"},{"name":"福佳白啤酒","location":"食堂11号柜","initial_qty":0,"restock":0,"remaining_qty":0,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":0,"diff":-1,"claims":[],"location_group":"一厂"},{"name":"彩虹扇","location":"办公室密码柜","initial_qty":0,"restock":0,"remaining_qty":0,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":0,"diff":-9,"claims":[],"location_group":"一厂"},{"name":"餐具套装","location":"二楼仓库","initial_qty":0,"restock":0,"remaining_qty":0,"restock_time":"","restock_qty":0,"claimed_qty":20,"price":"","count_qty":0,"diff":-41,"claims":[{"qty":20,"purpose":"Career Days2024","claimer":"Sarah","time":"2024.5.13"},{"qty":11,"purpose":"","claimer":"Sarah","time":"2024.5.15"},{"qty":10,"purpose":"","claimer":"Sarah","time":"2024.5.17"},{"qty":9,"purpose":"","claimer":"Sarah","time":"2024.5.20"},{"qty":20,"purpose":"Sarah","claimer":"","time":"5.13"},{"qty":11,"purpose":"Sarah","claimer":"","time":"5.15"},{"qty":10,"purpose":"Sarah","claimer":"","time":"5.17"},{"qty":9,"purpose":"Sarah","claimer":"","time":"5.2"}],"location_group":"一厂"},{"name":"超能洗洁精","location":"行政仓库","initial_qty":0,"restock":0,"remaining_qty":0,"restock_time":"","restock_qty":0,"claimed_qty":59,"price":"","count_qty":0,"diff":-280,"claims":[{"qty":59,"purpose":"","claimer":"Sarah","time":"2024.5.21"},{"qty":59,"purpose":"Onevoice, Sarah","claimer":"","time":"5.21"},{"qty":55,"purpose":"Onevoice, Stephanie","claimer":"","time":"5.21"},{"qty":29,"purpose":"Onevoice, Stephanie","claimer":"","time":"5.22"},{"qty":538,"purpose":"Onevoice, Sarah","claimer":"","time":"5.29-6.5"},{"qty":230,"purpose":"2025Onevoice宣讲（备注：Rachel）","claimer":"","time":"2025/6/20"}],"location_group":"一厂"},{"name":"超能洗洁精","location":"食堂11号柜","initial_qty":0,"restock":0,"remaining_qty":0,"restock_time":"","restock_qty":0,"claimed_qty":55,"price":"","count_qty":0,"diff":0,"claims":[{"qty":55,"purpose":"","claimer":"Stephanie","time":"2024.5.21"},{"qty":29,"purpose":"","claimer":"Stephanie","time":"2024.5.22"},{"qty":527,"purpose":"","claimer":"","time":""},{"qty":230,"purpose":"2025Onevoice宣讲","claimer":"Rachel","time":"2025.06.20"},{"qty":59,"purpose":"Onevoice, Sarah","claimer":"","time":"5.21"},{"qty":55,"purpose":"Onevoice, Stephanie","claimer":"","time":"5.21"},{"qty":29,"purpose":"Onevoice, Stephanie","claimer":"","time":"5.22"},{"qty":538,"purpose":"Onevoice, Sarah","claimer":"","time":"5.29-6.5"},{"qty":230,"purpose":"2025Onevoice宣讲（备注：Rachel）","claimer":"","time":"2025/6/20"}],"location_group":"一厂"},{"name":"解压便签","location":"食堂11号柜","initial_qty":0,"restock":0,"remaining_qty":0,"restock_time":"","restock_qty":0,"claimed_qty":45,"price":"","count_qty":2,"diff":-58,"claims":[{"qty":45,"purpose":"525关爱活动","claimer":"Sarah","time":"2024.5.24"},{"qty":12,"purpose":"","claimer":"Sarah","time":"2024.6.18"},{"qty":73,"purpose":"彩虹月","claimer":"Sarah","time":"2024.6.27"},{"qty":10,"purpose":"SWD Planing workshop","claimer":"Lydia Lin","time":"2025.8.21"},{"qty":43,"purpose":"525爱自己，Sarah","claimer":"","time":"5.24"},{"qty":12,"purpose":"Sarah","claimer":"","time":"6.18"},{"qty":73,"purpose":"彩虹月，Sarah","claimer":"","time":"6.27"},{"qty":10,"purpose":"","claimer":"","time":""}],"location_group":"一厂"},{"name":"迪士尼无线键盘鼠标","location":"二楼仓库","initial_qty":10,"restock":0,"remaining_qty":9,"restock_time":"","restock_qty":0,"claimed_qty":10,"price":"","count_qty":6,"diff":-4,"claims":[{"qty":10,"purpose":"WPF&SWD management team H1 recognition","claimer":"Stephanie","time":"2024.7.1"},{"qty":10,"purpose":"WPF&SWD management team H1 recognition，Stephanie","claimer":"","time":"7.1"}],"location_group":"一厂"},{"name":"左点充气按摩枕","location":"二楼仓库","initial_qty":0,"restock":0,"remaining_qty":0,"restock_time":"","restock_qty":0,"claimed_qty":10,"price":"","count_qty":0,"diff":0,"claims":[{"qty":10,"purpose":"WPF&SWD management team H1 recognition","claimer":"Stephanie","time":"2024.7.1"},{"qty":3,"purpose":"EE cluster 业务&人才盘点会","claimer":"Rachel","time":"2024.7.29"},{"qty":1,"purpose":"TWI 培训老师Fiona答谢","claimer":"Sarah","time":"2024.11.1"},{"qty":1,"purpose":"王虹farewell礼物","claimer":"Sarah","time":"2025.3.27"},{"qty":4,"purpose":"SPS精益关键知识点全员科普活动","claimer":"娄振强","time":"2025.06.18"},{"qty":10,"purpose":"","claimer":"","time":"7.1"},{"qty":3,"purpose":"","claimer":"","time":""},{"qty":1,"purpose":"TWI 培训老师Fiona答谢/Sarah（备注：培训讲师Fiona）","claimer":"","time":"11.1"},{"qty":1,"purpose":"王虹farewell礼物（备注：Sarah）","claimer":"","time":"2025/3/27"},{"qty":4,"purpose":"","claimer":"","time":""}],"location_group":"一厂"},{"name":"谢裕大茉莉祁红（红毛峰）","location":"二楼仓库","initial_qty":0,"restock":0,"remaining_qty":0,"restock_time":"","restock_qty":0,"claimed_qty":1,"price":"","count_qty":2,"diff":0,"claims":[{"qty":1,"purpose":"情景领导力培训老师答谢","claimer":"Rachel","time":"2024.9.9"},{"qty":1,"purpose":"TWI 培训老师Fiona答谢","claimer":"Rachel","time":"2024.11.1"},{"qty":1,"purpose":"培训老师Selina答谢","claimer":"Rachel","time":"2024.12.2"},{"qty":1,"purpose":"情景领导力培训老师答谢","claimer":"","time":"9.9"},{"qty":1,"purpose":"TWI 培训老师Fiona答谢/Rachel（备注：培训讲师Fiona）","claimer":"","time":"11.1"},{"qty":1,"purpose":"培训老师Selina答谢/Rachel（备注：Selina）","claimer":"","time":"12.2"}],"location_group":"一厂"},{"name":"伸缩折叠桌面支架","location":"行政仓库","initial_qty":0,"restock":0,"remaining_qty":0,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":60,"diff":0,"claims":[],"location_group":"一厂"},{"name":"便携小风扇","location":"行政仓库","initial_qty":0,"restock":0,"remaining_qty":0,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":59,"diff":0,"claims":[],"location_group":"一厂"},{"name":"洁丽雅毛巾2","location":"行政仓库","initial_qty":0,"restock":0,"remaining_qty":0,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":50,"diff":0,"claims":[],"location_group":"一厂"},{"name":"艾草锤","location":"行政仓库","initial_qty":0,"restock":0,"remaining_qty":0,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":40,"diff":0,"claims":[],"location_group":"一厂"},{"name":"祁门红茶","location":"二楼仓库","initial_qty":6,"restock":0,"remaining_qty":6,"restock_time":"2025.2.27","restock_qty":0,"claimed_qty":6,"price":187.3,"count_qty":0,"diff":0,"claims":[{"qty":6,"purpose":"一季度生日会","claimer":"","time":"2025.3.12"},{"qty":1,"purpose":"结构化汇报Training","claimer":"rachel","time":"2025.05.13"},{"qty":1,"purpose":"工艺培训结业for Mark","claimer":"Rachel","time":"45876"},{"qty":1,"purpose":"Ivo十年认可","claimer":"sarah","time":"2025.8.26"},{"qty":6,"purpose":"3.12一季度生日会","claimer":"","time":"2025/3/12"},{"qty":1,"purpose":"结构化汇报Training（备注：rachel）","claimer":"","time":"2025/5/13"},{"qty":1,"purpose":"工艺培训结业for Mark（备注：rachel）","claimer":"","time":"2025.8.7"},{"qty":1,"purpose":"Ivo十年认可（备注：Sarah）","claimer":"","time":"2025.8.26"}],"location_group":"一厂"},{"name":"美旅GUAM行李袋","location":"二楼仓库","initial_qty":0,"restock":0,"remaining_qty":0,"restock_time":"2025.2.27","restock_qty":0,"claimed_qty":1,"price":"","count_qty":0,"diff":0,"claims":[{"qty":1,"purpose":"认可IT杨政","claimer":"Sarah","time":"2025.3.3"},{"qty":49,"purpose":"202503蓝领员工大会&锡达路员工大会","claimer":"Sarah","time":"2025.3.14"},{"qty":1,"purpose":"认可IT杨政（备注：Sarah）","claimer":"","time":"3.3"},{"qty":49,"purpose":"","claimer":"","time":""}],"location_group":"一厂"},{"name":"运动巾套装","location":"HR-B","initial_qty":4,"restock":0,"remaining_qty":4,"restock_time":"","restock_qty":0,"claimed_qty":5,"price":"","count_qty":4,"diff":22,"claims":[{"qty":5,"purpose":"SMT TB","claimer":"Vivien","time":"2023.5.15"},{"qty":17,"purpose":"PCBA长服奖","claimer":"Rachel","time":"2025.9.9"},{"qty":3,"purpose":"教师节认可活动","claimer":"Sarah","time":"2025.9.12"},{"qty":2,"purpose":"教师节部门礼品发放","claimer":"Tina ZHANG","time":""},{"qty":1,"purpose":"workshop","claimer":"Jinfang GU","time":""},{"qty":2,"purpose":"","claimer":"娄振强","time":"2025.11.14"}],"location_group":"一厂"},{"name":"全棉时代礼包","location":"HR-B","initial_qty":3,"restock":0,"remaining_qty":3,"restock_time":"","restock_qty":0,"claimed_qty":1,"price":"","count_qty":3,"diff":0,"claims":[{"qty":1,"purpose":"新员工午餐会","claimer":"","time":""}],"location_group":"一厂"},{"name":"匹克智能跳绳","location":"HR-B","initial_qty":0,"restock":0,"remaining_qty":0,"restock_time":"","restock_qty":0,"claimed_qty":5,"price":"","count_qty":0,"diff":-4,"claims":[{"qty":5,"purpose":"SMT TB","claimer":"Vivien","time":"2023.5.12"},{"qty":6,"purpose":"SWD经理参访博世","claimer":"Sarah","time":"2025.05.09"},{"qty":4,"purpose":"SWD经理参访博世","claimer":"Sarah","time":"2025.05.20"},{"qty":5,"purpose":"SWD经理参访博世","claimer":"Sarah","time":"2025.06.04"},{"qty":15,"purpose":"SPS精益关键知识点全员科普活动","claimer":"娄振强","time":"2025.06.18"},{"qty":11,"purpose":"教师节礼物（已还9个）","claimer":"Yueling LI","time":"2025.9.10"},{"qty":2,"purpose":"自动化训练营","claimer":"黄威","time":"2025.9.24"},{"qty":5,"purpose":"拜访苏大老师","claimer":"黄威","time":"2025.12.19"},{"qty":21,"purpose":"转移去三厂","claimer":"Sarah","time":"2026.8.19"},{"qty":15,"purpose":"","claimer":"","time":""},{"qty":10,"purpose":"HR培训（备注：Sarah）","claimer":"","time":"2026\\6\\4"}],"location_group":"一厂"},{"name":"绿联蓝牙双模垂直鼠标","location":"二楼仓库","initial_qty":0,"restock":0,"remaining_qty":0,"restock_time":"2025.04.21","restock_qty":0,"claimed_qty":5,"price":"","count_qty":0,"diff":0,"claims":[{"qty":5,"purpose":"家庭日志愿者礼物","claimer":"rachel","time":"2025.8.15"},{"qty":4,"purpose":"教师节认可活动","claimer":"Sarah","time":"2025.9.10"},{"qty":4,"purpose":"CS&Q workshop","claimer":"Jinfang GU","time":"2025.9.11"},{"qty":17,"purpose":"7.29认可奖品（备注：Rachel）","claimer":"","time":"2025.7.29"},{"qty":5,"purpose":"","claimer":"","time":""},{"qty":4,"purpose":"教师节认可活动（备注：Sarah）","claimer":"","time":"2025.9.10"},{"qty":4,"purpose":"教师节礼品（备注：Jinfang Gu）","claimer":"","time":"2025.9.11"}],"location_group":"一厂"},{"name":"有品智能体脂秤","location":"二楼仓库","initial_qty":6,"restock":0,"remaining_qty":6,"restock_time":"2025.04.21","restock_qty":0,"claimed_qty":3,"price":"","count_qty":0,"diff":0,"claims":[{"qty":3,"purpose":"教师节认可活动","claimer":"Sarah","time":"2025.9.15"},{"qty":3,"purpose":"","claimer":"","time":""}],"location_group":"一厂"},{"name":"欧丽薇兰特级初榨橄榄油750ML*2插画礼盒","location":"行政仓库","initial_qty":0,"restock":0,"remaining_qty":0,"restock_time":"2025.04.21","restock_qty":0,"claimed_qty":10,"price":"","count_qty":0,"diff":0,"claims":[{"qty":10,"purpose":"经理生日礼品","claimer":"张晓晟","time":"2025.8.11"},{"qty":10,"purpose":"经理生日礼品（备注：张晓晟）","claimer":"","time":"2025.8.11"}],"location_group":"一厂"},{"name":"施耐德萱绎系列排插","location":"三厂仓库","initial_qty":14,"restock":0,"remaining_qty":14,"restock_time":"2025.04.21","restock_qty":0,"claimed_qty":1,"price":79.7,"count_qty":0,"diff":0,"claims":[{"qty":1,"purpose":"校企合作（秦皇岛）","claimer":"Rachel","time":"2025.9.29"},{"qty":5,"purpose":"客户拜访","claimer":"黄威","time":"2025.10.13"},{"qty":10,"purpose":"2025年秋季校招","claimer":"Sarah","time":"2025.10.17"},{"qty":6,"purpose":"苏州客户拜访","claimer":"娄振强","time":"2025.10.30"},{"qty":3,"purpose":"","claimer":"","time":""},{"qty":5,"purpose":"","claimer":"","time":""},{"qty":2,"purpose":"奖励认可活动（备注：韦雅娟、张中继）","claimer":"","time":"2025.10.31"},{"qty":5,"purpose":"拜访苏大老师（备注：黄威）","claimer":"","time":"2025.12.19"},{"qty":3,"purpose":"老师参访（备注：黄威）","claimer":"","time":"2026.2.2"},{"qty":9,"purpose":"英飞凌参访（备注：Sarah）","claimer":"","time":"2026.2.6"},{"qty":1,"purpose":"备注：陈智青","claimer":"","time":"2026.3.5"},{"qty":1,"purpose":"","claimer":"","time":""},{"qty":5,"purpose":"客户拜访（备注：黄威）","claimer":"","time":"2025.10.13"},{"qty":10,"purpose":"2025年秋季校招（备注：Sarah）","claimer":"","time":"2025.10.17"},{"qty":6,"purpose":"客户拜访（备注：娄振强）","claimer":"","time":"2025.10.30"},{"qty":6,"purpose":"校企合作项目礼品（备注：Rachel）","claimer":"","time":"2026\\6\\11"}],"location_group":"三厂"},{"name":"双立人施耐德定制水杯","location":"HR-B","initial_qty":0,"restock":3,"remaining_qty":0,"restock_time":"2023.5.29","restock_qty":3,"claimed_qty":2,"price":"","count_qty":6,"diff":20,"claims":[{"qty":2,"purpose":"","claimer":"赵晨龙","time":"2023.05.16"},{"qty":3,"purpose":"礼品","claimer":"Joy Chen","time":"2025.7.10"},{"qty":5,"purpose":"客户拜访","claimer":"黄威","time":"2025.10.13"},{"qty":2,"purpose":"奖励认可活动","claimer":"韦雅娟、张中继","time":"2025.10.30"},{"qty":5,"purpose":"拜访苏大老师","claimer":"黄威","time":"2025.12.19"},{"qty":5,"purpose":"接待外部PCBA访客 Leo","claimer":"","time":"11.12"},{"qty":4,"purpose":"贝卡尔特参观、王小龙","claimer":"","time":"5.28"},{"qty":3,"purpose":"南理工学校老师（备注：Sarah）","claimer":"","time":"2025/3/21"},{"qty":3,"purpose":"","claimer":"","time":""},{"qty":1,"purpose":"For CQC审核（备注：sunny wang）","claimer":"","time":"2025.8.6"},{"qty":1,"purpose":"校企合作（秦皇岛）（备注：Rachel）","claimer":"","time":"2025.9.29"}],"location_group":"一厂"},{"name":"冷酸灵旅行装","location":"食堂12号柜","initial_qty":19,"restock":0,"remaining_qty":19,"restock_time":"2025.05.21","restock_qty":0,"claimed_qty":136,"price":"","count_qty":0,"diff":0,"claims":[{"qty":136,"purpose":"SPS精益关键知识点全员科普活动","claimer":"娄振强","time":"2025.06.18"},{"qty":140,"purpose":"2025Onevoice宣讲","claimer":"Rachel","time":"2025.06.20"},{"qty":24,"purpose":"ic欢迎仪式","claimer":"王小龙","time":"2026.03.02"},{"qty":136,"purpose":"","claimer":"","time":""},{"qty":140,"purpose":"","claimer":"","time":""},{"qty":24,"purpose":"ic欢迎仪式（备注：王小龙）","claimer":"","time":"2026.3.2"}],"location_group":"一厂"},{"name":"蓝月亮洗衣液旅行装","location":"食堂10号柜","initial_qty":0,"restock":0,"remaining_qty":0,"restock_time":"2025.05.20","restock_qty":0,"claimed_qty":122,"price":"","count_qty":0,"diff":0,"claims":[{"qty":122,"purpose":"SPS精益关键知识点全员科普活动","claimer":"娄振强","time":"2025.06.18"},{"qty":328,"purpose":"2025Onevoice宣讲","claimer":"Rachel","time":"2025.06.20"},{"qty":122,"purpose":"","claimer":"","time":""},{"qty":328,"purpose":"","claimer":"","time":""}],"location_group":"一厂"},{"name":"施耐德定制雨伞","location":"HR-B","initial_qty":2,"restock":0,"remaining_qty":2,"restock_time":"","restock_qty":0,"claimed_qty":7,"price":49.22,"count_qty":2,"diff":31,"claims":[{"qty":7,"purpose":"教师节礼品","claimer":"丁亚辰","time":"2023.9.8"},{"qty":15,"purpose":"GSC HRC Gift","claimer":"Rachel","time":"2025.9.23"},{"qty":2,"purpose":"","claimer":"娄振强","time":"2025.11.14"},{"qty":5,"purpose":"One Voice Workshop","claimer":"Rachel","time":"2025.10.24"},{"qty":10,"purpose":"合规总结大会","claimer":"Jason","time":"2025.12.19"}],"location_group":"一厂"},{"name":"绿联桌面手机支架","location":"HR-B","initial_qty":0,"restock":0,"remaining_qty":0,"restock_time":"","restock_qty":0,"claimed_qty":4,"price":"","count_qty":0,"diff":11,"claims":[{"qty":4,"purpose":"agile workshop","claimer":"Stephanie","time":"2023.11.1"}],"location_group":"一厂"},{"name":"晶尊餐具豪华8件套","location":"二楼仓库","initial_qty":11,"restock":0,"remaining_qty":11,"restock_time":"2025.9.15","restock_qty":0,"claimed_qty":12,"price":"","count_qty":0,"diff":0,"claims":[{"qty":12,"purpose":"经理生日会","claimer":"张晓晟","time":"2025.11.17"},{"qty":12,"purpose":"经理生日会（备注：张晓晟）","claimer":"","time":"2025.11.17"},{"qty":3,"purpose":"WPF FA拜访（备注：Rachel）","claimer":"","time":"2026.1.5"},{"qty":11,"purpose":"汉江路H1 townhall（备注：Sarah）","claimer":"","time":"2026\\6\\12"}],"location_group":"一厂"},{"name":"晶尊餐具豪华8件套","location":"食堂10号柜","initial_qty":2,"restock":0,"remaining_qty":2,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":0,"diff":0,"claims":[{"qty":12,"purpose":"经理生日会（备注：张晓晟）","claimer":"","time":"2025.11.17"},{"qty":3,"purpose":"WPF FA拜访（备注：Rachel）","claimer":"","time":"2026.1.5"},{"qty":11,"purpose":"汉江路H1 townhall（备注：Sarah）","claimer":"","time":"2026\\6\\12"}],"location_group":"一厂"},{"name":"晶尊餐具豪华8件套","location":"食堂11号柜","initial_qty":3,"restock":0,"remaining_qty":3,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":0,"diff":0,"claims":[{"qty":12,"purpose":"经理生日会（备注：张晓晟）","claimer":"","time":"2025.11.17"},{"qty":3,"purpose":"WPF FA拜访（备注：Rachel）","claimer":"","time":"2026.1.5"},{"qty":11,"purpose":"汉江路H1 townhall（备注：Sarah）","claimer":"","time":"2026\\6\\12"}],"location_group":"一厂"},{"name":"晶尊餐具豪华8件套","location":"食堂12号柜","initial_qty":7,"restock":0,"remaining_qty":7,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":0,"diff":0,"claims":[{"qty":3,"purpose":"WPF FA认可","claimer":"Rachel","time":"2026.1.5"},{"qty":12,"purpose":"经理生日会（备注：张晓晟）","claimer":"","time":"2025.11.17"},{"qty":3,"purpose":"WPF FA拜访（备注：Rachel）","claimer":"","time":"2026.1.5"},{"qty":11,"purpose":"汉江路H1 townhall（备注：Sarah）","claimer":"","time":"2026\\6\\12"}],"location_group":"一厂"},{"name":"好雅岁月留香——正山小种","location":"二楼仓库","initial_qty":45,"restock":0,"remaining_qty":40,"restock_time":"2025.9.15","restock_qty":0,"claimed_qty":2,"price":157.62,"count_qty":0,"diff":0,"claims":[{"qty":2,"purpose":"校企合作","claimer":"阮一峰","time":"2025.10.10"},{"qty":6,"purpose":"客户拜访(借）已还，11.24","claimer":"Apple ZHOU","time":"2025.11.20"},{"qty":1,"purpose":"WPF FA认可","claimer":"Rachel","time":"2026.1.5"},{"qty":3,"purpose":"贵交老师拜访","claimer":"Sarah","time":"2026.8.21"},{"qty":2,"purpose":"南理工校企合作","claimer":"Claire","time":"2026.8.25"},{"qty":2,"purpose":"校企合作（备注：阮一峰）","claimer":"","time":"2025.10.10"},{"qty":6,"purpose":"客户拜访（备注：Apple ZHOU）","claimer":"","time":"2025.11.20"},{"qty":1,"purpose":"","claimer":"","time":""},{"qty":2,"purpose":"备注：Stephanie","claimer":"","time":"2026\\5\\14"},{"qty":2,"purpose":"拜访老师（备注：范伟）","claimer":"","time":"2026\\5\\21"},{"qty":3,"purpose":"贵交老师拜访（备注：Sarah）","claimer":"","time":"2026.8.21"},{"qty":2,"purpose":"南理工校企合作（备注：Claire）","claimer":"","time":"2026.8.25"}],"location_group":"一厂"},{"name":"施耐德定制锤纹保温杯","location":"二楼仓库","initial_qty":28,"restock":0,"remaining_qty":17,"restock_time":"2025.9.15","restock_qty":0,"claimed_qty":1,"price":"","count_qty":0,"diff":0,"claims":[{"qty":1,"purpose":"校企合作","claimer":"阮一峰","time":"2025.10.10"},{"qty":1,"purpose":"","claimer":"Sarah","time":"2026.8.12"},{"qty":1,"purpose":"","claimer":"顾娟","time":"2026.8.13"},{"qty":1,"purpose":"","claimer":"","time":""},{"qty":1,"purpose":"备注：Sarah","claimer":"","time":"2026.8.12"},{"qty":1,"purpose":"备注：顾娟","claimer":"","time":"2026.8.13"},{"qty":20,"purpose":"备注：Tinna","claimer":"","time":"2026.4·28"}],"location_group":"一厂"},{"name":"施耐德定制ALPHA字母笔（9支装）","location":"HR-B","initial_qty":64,"restock":80,"remaining_qty":24,"restock_time":"4.19","restock_qty":30,"claimed_qty":12,"price":29.5,"count_qty":62,"diff":33,"claims":[{"qty":12,"purpose":"","claimer":"nora","time":"2023.04.26"},{"qty":3,"purpose":"老师参访","claimer":"","time":""},{"qty":10,"purpose":"英飞凌参访","claimer":"","time":""},{"qty":30,"purpose":"转移去三厂","claimer":"Claire","time":"2026.8.21"},{"qty":1,"purpose":"新员工入职（备注：Sarah）","claimer":"","time":"2026.8.28"},{"qty":1,"purpose":"Stephanie","claimer":"","time":"4.26"},{"qty":9,"purpose":"无锡 Young Talent 试用期答辩 Rachel（备注：华晨晨，白京，孙丹妮，孟卓，刘心悦，周家晖，华琳云，韩世豪，杨萌）","claimer":"","time":"11.14"},{"qty":3,"purpose":"","claimer":"","time":""},{"qty":6,"purpose":"贵州校招（备注：Rachel）","claimer":"","time":"2025/3/12"},{"qty":10,"purpose":"订单班合作（备注：Claire）","claimer":"","time":"2025/6/9"},{"qty":3,"purpose":"徐州工程学院校企合作（备注：范伟）","claimer":"","time":"2025/6/16"},{"qty":7,"purpose":"SWD Planning Workshop（备注：Lydia Lin）","claimer":"","time":"2025.8.21"},{"qty":20,"purpose":"","claimer":"","time":""},{"qty":5,"purpose":"","claimer":"","time":""},{"qty":5,"purpose":"贵州交职院订单班入职仪式，rachel领取","claimer":"","time":"7.15"},{"qty":10,"purpose":"英飞凌参访（备注：Sarah）","claimer":"","time":"2026.2.6"}],"location_group":"一厂"},{"name":"牛奶保温杯","location":"HR-B","initial_qty":0,"restock":0,"remaining_qty":0,"restock_time":"","restock_qty":0,"claimed_qty":15,"price":"","count_qty":8,"diff":4,"claims":[{"qty":15,"purpose":"无锡工厂数字化认证","claimer":"刘康宁","time":"2024.3.15"},{"qty":1,"purpose":"","claimer":"Sarah","time":"2025.10.20"},{"qty":1,"purpose":"孙香","claimer":"","time":"4.28"},{"qty":1,"purpose":"杨嘉祺,Stephanie领取","claimer":"","time":"7.12"},{"qty":3,"purpose":"礼品（备注：Joy Chen）","claimer":"","time":"2025.7.10"},{"qty":1,"purpose":"","claimer":"","time":""},{"qty":3,"purpose":"老师参访（备注：黄威）","claimer":"","time":"2026.2.2"}],"location_group":"一厂"},{"name":"施耐德定制impact帆布袋（Nora)","location":"食堂10柜","initial_qty":70,"restock":0,"remaining_qty":50,"restock_time":"","restock_qty":0,"claimed_qty":20,"price":"","count_qty":0,"diff":0,"claims":[{"qty":20,"purpose":"转移去三厂","claimer":"Sarah","time":"2026.8.18"},{"qty":1,"purpose":"新员工入职（备注：Sarah）","claimer":"","time":"2026.8.28"}],"location_group":"一厂"},{"name":"施耐德定制impact鸭舌帽 （Nora）","location":"食堂12柜","initial_qty":31,"restock":0,"remaining_qty":21,"restock_time":"","restock_qty":0,"claimed_qty":13,"price":17.04,"count_qty":0,"diff":0,"claims":[{"qty":13,"purpose":"合规培训","claimer":"张仲继","time":"2026.7.30"},{"qty":3,"purpose":"","claimer":"Sarah","time":"2026.8.18"},{"qty":7,"purpose":"转移去三厂","claimer":"Sarah","time":"2026.8.19"},{"qty":3,"purpose":"有影响力的培训优秀学员（备注：Sarah）","claimer":"","time":"2026.8.18"},{"qty":13,"purpose":"合规培训（备注：张仲继）","claimer":"","time":"2026\\7\\30"}],"location_group":"一厂"},{"name":"施耐德绿色卡套","location":"三厂仓库","initial_qty":84,"restock":0,"remaining_qty":84,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":0,"diff":0,"claims":[],"location_group":"三厂"},{"name":"施耐德绿色卡套配套挂绳","location":"三厂仓库","initial_qty":85,"restock":0,"remaining_qty":85,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":0,"diff":0,"claims":[],"location_group":"三厂"},{"name":"行李箱20寸","location":"二楼仓库","initial_qty":1,"restock":0,"remaining_qty":1,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":0,"diff":0,"claims":[],"location_group":"一厂"},{"name":"行李箱20寸","location":"三厂仓库","initial_qty":2,"restock":0,"remaining_qty":2,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":0,"diff":0,"claims":[],"location_group":"三厂"},{"name":"乐扣乐扣冲牙器","location":"HR-B","initial_qty":0,"restock":0,"remaining_qty":0,"restock_time":"","restock_qty":0,"claimed_qty":8,"price":"","count_qty":0,"diff":-10,"claims":[{"qty":8,"purpose":"Q3经理生日","claimer":"","time":"2024.11.22"},{"qty":8,"purpose":"Q3经理生日会","claimer":"","time":"11.22"},{"qty":12,"purpose":"备注：Tinna","claimer":"","time":"2026.4·28"}],"location_group":"一厂"},{"name":"摩飞电热水杯","location":"HR-B","initial_qty":1,"restock":0,"remaining_qty":1,"restock_time":"","restock_qty":0,"claimed_qty":2,"price":"","count_qty":3,"diff":-14,"claims":[{"qty":2,"purpose":"Wira、陆华到访","claimer":"娄振强","time":"2024.7.2"},{"qty":6,"purpose":"","claimer":"","time":""},{"qty":1,"purpose":"张晴晴，Rachel","claimer":"","time":"8.23"},{"qty":6,"purpose":"WPF Lab(Service/FA) section annual meeting Recognition（备注：Rachel）","claimer":"","time":"12.25"},{"qty":6,"purpose":"专家认可8.13（备注：Rachel）","claimer":"","time":"2025.8.13"}],"location_group":"一厂"},{"name":"苏泊尔五层蒸锅","location":"保安室仓库","initial_qty":0,"restock":0,"remaining_qty":0,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":0,"diff":0,"claims":[],"location_group":"一厂"},{"name":"双立人enjoy系列真空保温茶滤杯","location":"HR-B","initial_qty":6,"restock":0,"remaining_qty":6,"restock_time":"","restock_qty":0,"claimed_qty":1,"price":"","count_qty":6,"diff":-13,"claims":[{"qty":1,"purpose":"无锡工厂数字化认证","claimer":"刘康宁","time":"2024.3.15"}],"location_group":"一厂"},{"name":"南孚磁吸充电宝","location":"三厂仓库","initial_qty":2,"restock":0,"remaining_qty":2,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":191.9,"count_qty":0,"diff":0,"claims":[],"location_group":"三厂"},{"name":"苏泊尔多功能电蒸锅","location":"三厂仓库","initial_qty":12,"restock":0,"remaining_qty":12,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":0,"diff":0,"claims":[],"location_group":"三厂"},{"name":"徕芬高速吹风机","location":"三厂仓库","initial_qty":50,"restock":0,"remaining_qty":50,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":205.4,"count_qty":0,"diff":0,"claims":[],"location_group":"三厂"},{"name":"施耐德定制蛋蛋包","location":"三厂仓库","initial_qty":100,"restock":0,"remaining_qty":99,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":40.04,"count_qty":0,"diff":0,"claims":[{"qty":15,"purpose":"无锡管理层workshop（备注：Sarah）","claimer":"","time":"2025.9.15"},{"qty":15,"purpose":"GSC HRC GIFT（备注：Rachel）","claimer":"","time":"2025.9.23"},{"qty":5,"purpose":"One Voice Workshop（备注：Rachel）","claimer":"","time":"2025.10.24"},{"qty":2,"purpose":"WUXI Site  Kaizen Week（备注：娄振强）","claimer":"","time":"2025.11.14"},{"qty":10,"purpose":"合规总结大会（备注：Jason）","claimer":"","time":"2025.12.19"},{"qty":1,"purpose":"备注：Sarah","claimer":"","time":"2026\\6\\12"}],"location_group":"三厂"},{"name":"小小宝移动电源（充电宝）","location":"三厂仓库","initial_qty":50,"restock":0,"remaining_qty":50,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":124.61,"count_qty":0,"diff":0,"claims":[],"location_group":"三厂"},{"name":"花点时间鲜花卡198型","location":"三厂仓库","initial_qty":50,"restock":0,"remaining_qty":48,"restock_time":"","restock_qty":0,"claimed_qty":2,"price":118.3,"count_qty":0,"diff":0,"claims":[{"qty":2,"purpose":"有影响力的培训教师礼品","claimer":"Sarah","time":"2026.8.14"},{"qty":2,"purpose":"有影响力的培训教师礼品（备注：Sarah）","claimer":"","time":"2026.8.14"}],"location_group":"三厂"},{"name":"灯塔马克杯","location":"三厂仓库","initial_qty":97,"restock":0,"remaining_qty":95,"restock_time":"","restock_qty":0,"claimed_qty":3,"price":20.34,"count_qty":0,"diff":0,"claims":[{"qty":3,"purpose":"Summer Intern Round Table活动","claimer":"Claire","time":"2026.8.14"},{"qty":6,"purpose":"培训","claimer":"张伟","time":"2024.7.10"},{"qty":3,"purpose":"Summer Intern Round Table活动（备注：Claire）","claimer":"","time":"2026.8.14"},{"qty":2,"purpose":"新员工入职（备注：Sarah）","claimer":"","time":"2026.8.28"}],"location_group":"三厂"},{"name":"施耐德定制口袋迷你保温杯","location":"HR-B","initial_qty":51,"restock":50,"remaining_qty":26,"restock_time":"2025.2.27","restock_qty":0,"claimed_qty":3,"price":37.45,"count_qty":0,"diff":0,"claims":[{"qty":3,"purpose":"","claimer":"Stephanie，Julia，Tracy","time":"2025.04.21"},{"qty":1,"purpose":"新员工入职（备注：Sarah）","claimer":"","time":"2026.8.28"},{"qty":3,"purpose":"备注：Stephanie，Julia，Tracy","claimer":"","time":"2025/4/21"},{"qty":6,"purpose":"SWD经理参访博世（备注：Sarah）","claimer":"","time":"2025/5/9"},{"qty":4,"purpose":"SWD经理参访博世（备注：Sarah）","claimer":"","time":"2025/5/20"},{"qty":5,"purpose":"SWD经理参访博世（备注：Sarah）","claimer":"","time":"2025/6/4"},{"qty":15,"purpose":"","claimer":"","time":""},{"qty":11,"purpose":"教师节礼品（备注：Yueling LIU）","claimer":"","time":"2025.9.10"},{"qty":2,"purpose":"自动化训练营（备注：黄威）","claimer":"","time":"2025.9.24"},{"qty":5,"purpose":"","claimer":"","time":""}],"location_group":"一厂"},{"name":"施耐德智意系列排插","location":"HR-B","initial_qty":2,"restock":0,"remaining_qty":2,"restock_time":"2025.04.21","restock_qty":0,"claimed_qty":0,"price":"","count_qty":0,"diff":0,"claims":[],"location_group":"一厂"},{"name":"KACO书源中性笔5支装","location":"HR-B","initial_qty":20,"restock":0,"remaining_qty":20,"restock_time":"2025.9.15","restock_qty":0,"claimed_qty":0,"price":"","count_qty":0,"diff":0,"claims":[],"location_group":"一厂"},{"name":"施耐德萱绎系列排插1.8m","location":"HR-B","initial_qty":64,"restock":50,"remaining_qty":59,"restock_time":"2025.9.15","restock_qty":0,"claimed_qty":18,"price":79.7,"count_qty":0,"diff":0,"claims":[{"qty":18,"purpose":"","claimer":"娄振强","time":"2025.11.14"},{"qty":3,"purpose":"贵交老师拜访","claimer":"Sarah","time":"2026.8.21"},{"qty":2,"purpose":"南理工校企合作","claimer":"Claire","time":"2026.8.25"},{"qty":5,"purpose":"","claimer":"","time":"2025.11.14"},{"qty":3,"purpose":"贵交老师拜访（备注：Sarah）","claimer":"","time":"2026.8.21"},{"qty":2,"purpose":"南理工校企合作（备注：Claire）","claimer":"","time":"2026.8.25"}],"location_group":"一厂"},{"name":"实木相框","location":"HR-B","initial_qty":5,"restock":0,"remaining_qty":5,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":0,"diff":0,"claims":[],"location_group":"一厂"},{"name":"施耐德定制可持续主题帆布袋","location":"HR-A＋HR-C","initial_qty":0,"restock":0,"remaining_qty":0,"restock_time":"","restock_qty":0,"claimed_qty":13,"price":"","count_qty":58,"diff":11,"claims":[{"qty":13,"purpose":"家庭日 志愿者礼品","claimer":"Sarah","time":"2024.8.5"},{"qty":10,"purpose":"家庭日 志愿者礼品","claimer":"","time":"8.5"},{"qty":8,"purpose":"工信局联络窗口（备注：外部人员）","claimer":"","time":"12.9"},{"qty":3,"purpose":"","claimer":"","time":""},{"qty":3,"purpose":"老师参访（备注：黄威）","claimer":"","time":"2026.2.2"}],"location_group":"一厂"},{"name":"灯塔2","location":"HR-A","initial_qty":5,"restock":0,"remaining_qty":5,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":0,"diff":-4,"claims":[],"location_group":"一厂"},{"name":"灯塔2","location":"HR-B","initial_qty":1,"restock":0,"remaining_qty":1,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":0,"diff":0,"claims":[],"location_group":"一厂"},{"name":"全棉时代臻品组合（黄威）","location":"HR-A","initial_qty":0,"restock":0,"remaining_qty":0,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":0,"diff":-3,"claims":[],"location_group":"一厂"},{"name":"尊尚围巾手套套装","location":"HR-A","initial_qty":0,"restock":0,"remaining_qty":0,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":0,"diff":-2,"claims":[],"location_group":"一厂"},{"name":"折叠多用背包","location":"HR-A","initial_qty":0,"restock":0,"remaining_qty":0,"restock_time":"2025.2.27","restock_qty":0,"claimed_qty":1,"price":"","count_qty":0,"diff":0,"claims":[{"qty":1,"purpose":"Ivo十年认可","claimer":"Sarah","time":"2025.8.26"},{"qty":1,"purpose":"","claimer":"","time":""},{"qty":17,"purpose":"PCBA长服奖（备注：Rachel）","claimer":"","time":"2025.9.9"},{"qty":2,"purpose":"教师节礼品（备注：Tina ZHANG）","claimer":"","time":"2025.9.10"},{"qty":1,"purpose":"","claimer":"","time":"2025.9.11"},{"qty":2,"purpose":"","claimer":"","time":"2025.11.14"},{"qty":15,"purpose":"备注：Sarah","claimer":"","time":"2026.4.10"},{"qty":10,"purpose":"汉江路H1 townhall（备注：Sarah）","claimer":"","time":"2026\\6\\12"},{"qty":3,"purpose":"","claimer":"","time":""}],"location_group":"一厂"},{"name":"鸡蛋仔面巾盒","location":"HR 1-2","initial_qty":0,"restock":0,"remaining_qty":0,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":0,"diff":-22,"claims":[],"location_group":"一厂"},{"name":"pingu45周年毛绒盲盒","location":"二楼仓库","initial_qty":3,"restock":0,"remaining_qty":3,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":0,"diff":0,"claims":[],"location_group":"一厂"},{"name":"泡泡玛特-比奇堡的居民们","location":"二楼仓库","initial_qty":2,"restock":0,"remaining_qty":2,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":0,"diff":0,"claims":[],"location_group":"一厂"},{"name":"黑色logo卡套","location":"食堂11柜","initial_qty":15,"restock":0,"remaining_qty":15,"restock_time":"","restock_qty":0,"claimed_qty":1,"price":"","count_qty":0,"diff":0,"claims":[{"qty":1,"purpose":"","claimer":"张晓晟","time":"2016.8.13"},{"qty":15,"purpose":"转移去三厂","claimer":"Claire","time":"2026.8.21"},{"qty":19,"purpose":"","claimer":"","time":""},{"qty":49,"purpose":"","claimer":"","time":""},{"qty":1,"purpose":"For董小花（备注：娄振强）","claimer":"","time":"2025/5/13"},{"qty":1,"purpose":"For Tracy（备注：sarah）","claimer":"","time":"2025/7/29"},{"qty":1,"purpose":"For Steven（备注：张晓晟）","claimer":"","time":"2025/8/1"},{"qty":1,"purpose":"备注：张晓晟","claimer":"","time":"2026.8.13"},{"qty":41,"purpose":"Townhall认可","claimer":"","time":"5.8"}],"location_group":"一厂"},{"name":"施耐德定制impact鸭舌帽 （Nora）","location":"三厂仓库","initial_qty":7,"restock":7,"remaining_qty":7,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":17.04,"count_qty":0,"diff":0,"claims":[{"qty":3,"purpose":"有影响力的培训优秀学员（备注：Sarah）","claimer":"","time":"2026.8.18"},{"qty":13,"purpose":"合规培训（备注：张仲继）","claimer":"","time":"2026\\7\\30"}],"location_group":"三厂"},{"name":"施耐德定制impact帆布袋（Nora)","location":"三厂仓库","initial_qty":20,"restock":20,"remaining_qty":19,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":0,"diff":0,"claims":[{"qty":1,"purpose":"新员工入职（备注：Sarah）","claimer":"","time":"2026.8.28"}],"location_group":"三厂"},{"name":"施耐德定制口袋迷你保温杯","location":"三厂仓库","initial_qty":21,"restock":21,"remaining_qty":2,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":37.45,"count_qty":0,"diff":0,"claims":[{"qty":1,"purpose":"新员工入职（备注：Sarah）","claimer":"","time":"2026.8.28"},{"qty":3,"purpose":"备注：Stephanie，Julia，Tracy","claimer":"","time":"2025/4/21"},{"qty":6,"purpose":"SWD经理参访博世（备注：Sarah）","claimer":"","time":"2025/5/9"},{"qty":4,"purpose":"SWD经理参访博世（备注：Sarah）","claimer":"","time":"2025/5/20"},{"qty":5,"purpose":"SWD经理参访博世（备注：Sarah）","claimer":"","time":"2025/6/4"},{"qty":15,"purpose":"","claimer":"","time":""},{"qty":11,"purpose":"教师节礼品（备注：Yueling LIU）","claimer":"","time":"2025.9.10"},{"qty":2,"purpose":"自动化训练营（备注：黄威）","claimer":"","time":"2025.9.24"},{"qty":5,"purpose":"","claimer":"","time":""}],"location_group":"三厂"},{"name":"保温杯（韩文包装）","location":"HR-B","initial_qty":3,"restock":3,"remaining_qty":3,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":0,"diff":0,"claims":[],"location_group":"一厂"},{"name":"施耐德定制潜水料单肩包","location":"三厂仓库","initial_qty":20,"restock":20,"remaining_qty":17,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":0,"diff":0,"claims":[{"qty":2,"purpose":"给TA（备注：Sarah）","claimer":"","time":"2025.9.25"},{"qty":3,"purpose":"To 三位实习生（备注：Sarah）","claimer":"","time":"2026.8.28"}],"location_group":"三厂"},{"name":"绿色圆形工牌套","location":"三厂仓库","initial_qty":15,"restock":15,"remaining_qty":15,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":0,"diff":0,"claims":[],"location_group":"三厂"},{"name":"施耐德定制ALPHA字母笔（9支装）","location":"三厂仓库","initial_qty":30,"restock":30,"remaining_qty":29,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":29.5,"count_qty":0,"diff":0,"claims":[{"qty":1,"purpose":"新员工入职（备注：Sarah）","claimer":"","time":"2026.8.28"},{"qty":1,"purpose":"Stephanie","claimer":"","time":"4.26"},{"qty":9,"purpose":"无锡 Young Talent 试用期答辩 Rachel（备注：华晨晨，白京，孙丹妮，孟卓，刘心悦，周家晖，华琳云，韩世豪，杨萌）","claimer":"","time":"11.14"},{"qty":3,"purpose":"","claimer":"","time":""},{"qty":6,"purpose":"贵州校招（备注：Rachel）","claimer":"","time":"2025/3/12"},{"qty":10,"purpose":"订单班合作（备注：Claire）","claimer":"","time":"2025/6/9"},{"qty":3,"purpose":"徐州工程学院校企合作（备注：范伟）","claimer":"","time":"2025/6/16"},{"qty":7,"purpose":"SWD Planning Workshop（备注：Lydia Lin）","claimer":"","time":"2025.8.21"},{"qty":20,"purpose":"","claimer":"","time":""},{"qty":5,"purpose":"","claimer":"","time":""},{"qty":5,"purpose":"贵州交职院订单班入职仪式，rachel领取","claimer":"","time":"7.15"},{"qty":10,"purpose":"英飞凌参访（备注：Sarah）","claimer":"","time":"2026.2.6"}],"location_group":"三厂"},{"name":"黑色logo卡套","location":"三厂仓库","initial_qty":15,"restock":15,"remaining_qty":15,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":0,"diff":0,"claims":[{"qty":19,"purpose":"","claimer":"","time":""},{"qty":49,"purpose":"","claimer":"","time":""},{"qty":1,"purpose":"For董小花（备注：娄振强）","claimer":"","time":"2025/5/13"},{"qty":1,"purpose":"For Tracy（备注：sarah）","claimer":"","time":"2025/7/29"},{"qty":1,"purpose":"For Steven（备注：张晓晟）","claimer":"","time":"2025/8/1"},{"qty":1,"purpose":"备注：张晓晟","claimer":"","time":"2026.8.13"},{"qty":41,"purpose":"Townhall认可","claimer":"","time":"5.8"}],"location_group":"三厂"},{"name":"利永紫砂","location":"三厂仓库","initial_qty":6,"restock":0,"remaining_qty":6,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":0,"diff":0,"claims":[],"location_group":"三厂"},{"name":"至夏户外休闲套装","location":"三厂仓库","initial_qty":1,"restock":0,"remaining_qty":1,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":0,"diff":0,"claims":[],"location_group":"三厂"},{"name":"星星锤","location":"三厂仓库","initial_qty":50,"restock":0,"remaining_qty":50,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":0,"diff":0,"claims":[],"location_group":"三厂"},{"name":"SKG颈椎枕护颈","location":"三厂仓库","initial_qty":5,"restock":0,"remaining_qty":5,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":188.6,"count_qty":0,"diff":0,"claims":[],"location_group":"三厂"},{"name":"绿联充电宝","location":"三厂仓库","initial_qty":2,"restock":0,"remaining_qty":2,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":0,"diff":0,"claims":[{"qty":10,"purpose":"校企合作项目礼品（备注：Rachel）","claimer":"","time":"2026\\6\\11"}],"location_group":"三厂"},{"name":"施耐德电气定制鼠标垫","location":"HR-C","initial_qty":30,"restock":0,"remaining_qty":30,"restock_time":"","restock_qty":0,"claimed_qty":5,"price":14.1,"count_qty":0,"diff":0,"claims":[],"location_group":"一厂"},{"name":"灯塔马克杯","location":"HR-A","initial_qty":5,"restock":0,"remaining_qty":5,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":20.34,"count_qty":0,"diff":0,"claims":[],"location_group":"一厂"},{"name":"灯塔马克杯","location":"HR-B","initial_qty":1,"restock":0,"remaining_qty":1,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":20.34,"count_qty":0,"diff":0,"claims":[],"location_group":"一厂"}],"办公用品":[{"name":"白板笔","location":"HR1-4","initial_qty":78,"restock":768,"remaining_qty":846,"restock_time":"2023.7.21","restock_qty":768,"claimed_qty":0,"price":"","count_qty":846,"diff":0,"claims":[],"location_group":"一厂"},{"name":"黑笔","location":"HR1-4","initial_qty":10,"restock":120,"remaining_qty":94,"restock_time":"2023.7.21","restock_qty":120,"claimed_qty":24,"price":"","count_qty":94,"diff":0,"claims":[{"qty":24,"purpose":"八国峰会","claimer":"丁亚辰","time":"2023.7.21"},{"qty":12,"purpose":"研发招聘","claimer":"丁亚辰","time":"2023.9.19"}],"location_group":"一厂"},{"name":"彩色中性笔","location":"HR1-4","initial_qty":12,"restock":0,"remaining_qty":12,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":12,"diff":0,"claims":[],"location_group":"一厂"},{"name":"荧光笔（盒）","location":"HR1-1","initial_qty":2,"restock":0,"remaining_qty":2,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":2,"diff":0,"claims":[],"location_group":"一厂"},{"name":"回形针（盒）","location":"HR1-2","initial_qty":2,"restock":0,"remaining_qty":2,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":2,"diff":0,"claims":[],"location_group":"一厂"},{"name":"照片（证书）框","location":"二楼仓库","initial_qty":12,"restock":0,"remaining_qty":0,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":0,"diff":-12,"claims":[],"location_group":"一厂"},{"name":"各式贺卡","location":"办公室密码柜","initial_qty":249,"restock":0,"remaining_qty":161,"restock_time":"","restock_qty":0,"claimed_qty":8,"price":"","count_qty":161,"diff":-80,"claims":[{"qty":8,"purpose":"","claimer":"Nora","time":"2023.11.14"}],"location_group":"一厂"},{"name":"信封（大）","location":"二楼仓库","initial_qty":40,"restock":0,"remaining_qty":0,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":0,"diff":0,"claims":[{"qty":40,"purpose":"","claimer":"行政","time":"4.19"}],"location_group":"一厂"},{"name":"信封（小）","location":"二楼仓库","initial_qty":900,"restock":0,"remaining_qty":0,"restock_time":"","restock_qty":0,"claimed_qty":40,"price":"","count_qty":0,"diff":0,"claims":[{"qty":40,"purpose":"年会抽奖","claimer":"张晓晟","time":"2023.01.12"},{"qty":860,"purpose":"","claimer":"行政","time":"4.19"}],"location_group":"一厂"},{"name":"透明文件夹","location":"HR1-4、密码柜","initial_qty":30,"restock":30,"remaining_qty":28,"restock_time":"2023.7.21","restock_qty":30,"claimed_qty":0,"price":"","count_qty":28,"diff":-32,"claims":[],"location_group":"一厂"},{"name":"黑色穿孔文件夹","location":"二楼仓库","initial_qty":5,"restock":0,"remaining_qty":5,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":5,"diff":0,"claims":[],"location_group":"一厂"},{"name":"文件夹配套资料袋","location":"办公室A柜","initial_qty":20,"restock":0,"remaining_qty":20,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":20,"diff":0,"claims":[],"location_group":"一厂"},{"name":"各色便签","location":"HR1-4","initial_qty":15,"restock":15,"remaining_qty":30,"restock_time":"2023.7.21","restock_qty":15,"claimed_qty":0,"price":"","count_qty":30,"diff":0,"claims":[],"location_group":"一厂"},{"name":"5号\\7号电池","location":"HR1-4","initial_qty":15,"restock":72,"remaining_qty":87,"restock_time":"2023.7.21","restock_qty":72,"claimed_qty":0,"price":"","count_qty":87,"diff":0,"claims":[],"location_group":"一厂"},{"name":"胶棒","location":"HR1-2","initial_qty":3,"restock":0,"remaining_qty":2,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":2,"diff":-1,"claims":[],"location_group":"一厂"},{"name":"修正带","location":"HR1-4","initial_qty":1,"restock":0,"remaining_qty":0,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":0,"diff":-1,"claims":[],"location_group":"一厂"},{"name":"泡沫胶","location":"办公室A柜","initial_qty":1,"restock":0,"remaining_qty":0,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":0,"diff":-1,"claims":[],"location_group":"一厂"},{"name":"双面胶","location":"HR1-4","initial_qty":8,"restock":0,"remaining_qty":4,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":4,"diff":-4,"claims":[],"location_group":"一厂"},{"name":"美纹胶","location":"HR1-2","initial_qty":7,"restock":6,"remaining_qty":7,"restock_time":"2023.05.10","restock_qty":6,"claimed_qty":3,"price":"","count_qty":7,"diff":-3,"claims":[{"qty":3,"purpose":"校招宣讲","claimer":"丁亚辰","time":"2023.9.20"}],"location_group":"一厂"},{"name":"《好好学习》","location":"办公室密码柜","initial_qty":3,"restock":0,"remaining_qty":4,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":4,"diff":1,"claims":[],"location_group":"一厂"},{"name":"《麦肯锡工作法》","location":"办公室密码柜","initial_qty":9,"restock":0,"remaining_qty":3,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":3,"diff":-6,"claims":[],"location_group":"一厂"},{"name":"奖状纸","location":"办公室密码柜","initial_qty":144,"restock":70,"remaining_qty":198,"restock_time":"2025.3.4","restock_qty":210,"claimed_qty":45,"price":"","count_qty":37,"diff":0,"claims":[{"qty":45,"purpose":"Townhall","claimer":"Sarah","time":"2024.5.8"},{"qty":1,"purpose":"Townhall","claimer":"Stephanie","time":"2024.5.23"},{"qty":15,"purpose":"","claimer":"","time":"2024.7.4"},{"qty":26,"purpose":"Townhall","claimer":"Rachel","time":"2024.8.23"},{"qty":41,"purpose":"教师节","claimer":"Rachel","time":"2024.9.10"},{"qty":9,"purpose":"无锡 Young Talent 试用期答辩","claimer":"Rachel","time":"2024.11.14"},{"qty":10,"purpose":"质量月","claimer":"华晨晨","time":"2024.11.12"},{"qty":30,"purpose":"质量月","claimer":"Leo","time":"2024.11.14"},{"qty":30,"purpose":"维修颁奖","claimer":"浦俊峰","time":"2025.9.1"},{"qty":3,"purpose":"CI颁奖","claimer":"Sam","time":"2025.9.5"},{"qty":30,"purpose":"","claimer":"","time":"2025.9.19"},{"qty":49,"purpose":"202503蓝领员工大会&锡达路员工大会","claimer":"Sarah","time":"2025.3.14"},{"qty":45,"purpose":"Townhall认可","claimer":"","time":"5.8"},{"qty":1,"purpose":"","claimer":"","time":"5.23"},{"qty":15,"purpose":"","claimer":"","time":"7.4"},{"qty":26,"purpose":"","claimer":"","time":""},{"qty":41,"purpose":"2024教师节","claimer":"","time":"9.10"},{"qty":9,"purpose":"无锡 Young Talent 试用期答辩 Rachel","claimer":"","time":"11.14"},{"qty":10,"purpose":"质量月 华晨晨","claimer":"","time":"11.12"},{"qty":30,"purpose":"质量月 Leo","claimer":"","time":"11.15"},{"qty":49,"purpose":"202503蓝领员工大会&锡达路员工大会（备注：Sarah）","claimer":"","time":"2025/3/14"},{"qty":30,"purpose":"维修部使用（备注：浦俊峰）","claimer":"","time":"2025.9.1"},{"qty":3,"purpose":"CI颁奖（备注：Sam）","claimer":"","time":"2025.9.5"}],"location_group":"一厂"},{"name":"施耐德LOGO纸袋（长）","location":"二楼仓库","initial_qty":32,"restock":0,"remaining_qty":108,"restock_time":"","restock_qty":0,"claimed_qty":4,"price":"","count_qty":108,"diff":85,"claims":[{"qty":4,"purpose":"8、9月经理生日","claimer":"Sarah","time":"2024.9.11"},{"qty":3,"purpose":"礼品","claimer":"Joy Chen","time":"2025.7.10"},{"qty":1,"purpose":"For CQC审核","claimer":"Sunny王","time":"2025.08.06"},{"qty":1,"purpose":"Ivo十年认可","claimer":"Sarah","time":"2025.8.26"},{"qty":4,"purpose":"","claimer":"","time":""},{"qty":3,"purpose":"","claimer":"","time":""},{"qty":1,"purpose":"","claimer":"","time":""}],"location_group":"一厂"},{"name":"施耐德LOGO纸袋（方）","location":"二楼仓库","initial_qty":42,"restock":0,"remaining_qty":32,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":32,"diff":-10,"claims":[],"location_group":"一厂"},{"name":"木制A3证书框","location":"办公室B柜","initial_qty":5,"restock":0,"remaining_qty":5,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":5,"diff":0,"claims":[],"location_group":"一厂"},{"name":"木制A4证书框","location":"办公室B柜","initial_qty":5,"restock":0,"remaining_qty":4,"restock_time":"","restock_qty":0,"claimed_qty":1,"price":"","count_qty":4,"diff":0,"claims":[{"qty":1,"purpose":"Wuxi site townhall","claimer":"Stephanie","time":"2024.5.23"},{"qty":5,"purpose":"Townhall认可","claimer":"Sarah","time":"2024.10.29"},{"qty":1,"purpose":"Stephanie","claimer":"","time":"5.23"},{"qty":5,"purpose":"Townhall认可  Sarah（备注：江泰辰，张相珍，王涛+Mourad照片框）","claimer":"","time":"10.29"}],"location_group":"一厂"},{"name":"玻璃A4证书框","location":"办公室B柜","initial_qty":5,"restock":0,"remaining_qty":1,"restock_time":"","restock_qty":0,"claimed_qty":1,"price":"","count_qty":1,"diff":0,"claims":[{"qty":1,"purpose":"破损","claimer":"Sarah","time":"2024.5.22"},{"qty":2,"purpose":"","claimer":"季泽华","time":"2024.5.22"},{"qty":1,"purpose":"Townhall认可","claimer":"Sarah","time":"2024.10.29"},{"qty":1,"purpose":"Townhall认可  Sarah（备注：MIA Program for WUXI Related Lines）","claimer":"","time":"10.29"}],"location_group":"一厂"},{"name":"白板纸","location":"HR1-1","initial_qty":15,"restock":0,"remaining_qty":15,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":15,"diff":0,"claims":[],"location_group":"一厂"},{"name":"投票点点","location":"HR1-2","initial_qty":16,"restock":0,"remaining_qty":16,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":16,"diff":0,"claims":[],"location_group":"一厂"},{"name":"档案袋姓名标签","location":"HR1-4/密码柜","initial_qty":24,"restock":0,"remaining_qty":24,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":24,"diff":0,"claims":[],"location_group":"一厂"},{"name":"花露水","location":"办公室密码柜","initial_qty":6,"restock":0,"remaining_qty":6,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":6,"diff":0,"claims":[],"location_group":"一厂"},{"name":"A4相框","location":"办公室B柜","initial_qty":10,"restock":0,"remaining_qty":6,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":6,"diff":-4,"claims":[],"location_group":"一厂"},{"name":"A5相框","location":"办公室B柜","initial_qty":10,"restock":0,"remaining_qty":5,"restock_time":"","restock_qty":0,"claimed_qty":3,"price":"","count_qty":5,"diff":-1,"claims":[{"qty":3,"purpose":"优秀员工表彰","claimer":"林静","time":"2023.10.19"},{"qty":1,"purpose":"","claimer":"林静","time":"2023.11.1"}],"location_group":"一厂"},{"name":"聘书","location":"办公室A柜","initial_qty":10,"restock":0,"remaining_qty":2,"restock_time":"","restock_qty":0,"claimed_qty":8,"price":"","count_qty":2,"diff":0,"claims":[{"qty":8,"purpose":"优秀员工表彰","claimer":"林静","time":"2023.10.19"}],"location_group":"一厂"},{"name":"获奖证书","location":"办公室A柜","initial_qty":10,"restock":0,"remaining_qty":0,"restock_time":"","restock_qty":0,"claimed_qty":8,"price":"","count_qty":0,"diff":-2,"claims":[{"qty":8,"purpose":"优秀员工表彰","claimer":"林静","time":"2023.10.19"}],"location_group":"一厂"},{"name":"校招文化衫","location":"办公室C柜","initial_qty":15,"restock":0,"remaining_qty":0,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":0,"diff":-15,"claims":[],"location_group":"一厂"},{"name":"培训引导布","location":"HR1-1","initial_qty":2,"restock":0,"remaining_qty":3,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":3,"diff":1,"claims":[],"location_group":"一厂"},{"name":"专家设计海报（stephanie快递）","location":"二楼仓库","initial_qty":1,"restock":0,"remaining_qty":0,"restock_time":"","restock_qty":0,"claimed_qty":1,"price":"","count_qty":0,"diff":0,"claims":[{"qty":1,"purpose":"","claimer":"行政","time":"4.19"}],"location_group":"一厂"},{"name":"相框","location":"二楼仓库","initial_qty":1,"restock":0,"remaining_qty":0,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":0,"diff":-1,"claims":[{"qty":3,"purpose":"Sarah，季泽华","claimer":"","time":"5.22"}],"location_group":"一厂"},{"name":"拍摄用品（反光板等）","location":"二楼仓库","initial_qty":1,"restock":0,"remaining_qty":1,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":1,"diff":0,"claims":[],"location_group":"一厂"},{"name":"档案袋","location":"行政仓库","initial_qty":39,"restock":0,"remaining_qty":39,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":39,"diff":0,"claims":[],"location_group":"一厂"},{"name":"红色荣誉证书","location":"行政仓库","initial_qty":14,"restock":0,"remaining_qty":14,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":14,"diff":0,"claims":[],"location_group":"一厂"},{"name":"包装纸","location":"食堂12柜","initial_qty":10,"restock":0,"remaining_qty":10,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":0,"diff":0,"claims":[],"location_group":"一厂"},{"name":"老白茶","location":"食堂11柜","initial_qty":1,"restock":0,"remaining_qty":1,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":0,"diff":0,"claims":[],"location_group":"一厂"},{"name":"彩色胶带","location":"食堂11柜","initial_qty":2,"restock":0,"remaining_qty":2,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":0,"diff":0,"claims":[],"location_group":"一厂"}],"道具":[{"name":"募捐箱","location":"二楼仓库","initial_qty":1,"restock":0,"remaining_qty":0,"restock_time":"","restock_qty":0,"claimed_qty":1,"price":"","count_qty":0,"diff":0,"claims":[{"qty":1,"purpose":"行政","claimer":"张晓晟","time":"4.19"}],"location_group":"一厂"},{"name":"抽奖箱","location":"二楼仓库","initial_qty":1,"restock":0,"remaining_qty":0,"restock_time":"","restock_qty":0,"claimed_qty":1,"price":"","count_qty":0,"diff":0,"claims":[{"qty":1,"purpose":"行政","claimer":"张晓晟","time":"4.19"}],"location_group":"一厂"},{"name":"礼物丝带","location":"HR1-4","initial_qty":8,"restock":0,"remaining_qty":8,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":8,"diff":0,"claims":[],"location_group":"一厂"},{"name":"应援棒","location":"餐厅11号柜","initial_qty":13,"restock":0,"remaining_qty":0,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":0,"diff":-13,"claims":[],"location_group":"一厂"},{"name":"钓鱼水桶","location":"餐厅10号柜","initial_qty":11,"restock":0,"remaining_qty":0,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":0,"diff":-11,"claims":[],"location_group":"一厂"},{"name":"气球（箱）","location":"餐厅10号柜","initial_qty":1,"restock":0,"remaining_qty":0,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":0,"diff":-1,"claims":[],"location_group":"一厂"},{"name":"手机防水袋","location":"餐厅10号柜","initial_qty":9,"restock":0,"remaining_qty":9,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":9,"diff":0,"claims":[],"location_group":"一厂"},{"name":"RIO鸡尾酒","location":"餐厅11号柜","initial_qty":36,"restock":0,"remaining_qty":0,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":0,"diff":-36,"claims":[{"qty":0,"purpose":"","claimer":"","time":""}],"location_group":"一厂"},{"name":"科罗娜","location":"餐厅11号柜","initial_qty":5,"restock":0,"remaining_qty":0,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":0,"diff":-5,"claims":[{"qty":0,"purpose":"","claimer":"","time":""}],"location_group":"一厂"},{"name":"开酒器","location":"餐厅11号柜","initial_qty":1,"restock":0,"remaining_qty":0,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":0,"diff":-1,"claims":[{"qty":0,"purpose":"","claimer":"","time":""}],"location_group":"一厂"},{"name":"爱迪生奖牌","location":"餐厅12号柜","initial_qty":9,"restock":0,"remaining_qty":0,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":0,"diff":-9,"claims":[],"location_group":"一厂"},{"name":"灯塔","location":"二楼仓库","initial_qty":7,"restock":0,"remaining_qty":0,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":0,"diff":-7,"claims":[],"location_group":"一厂"},{"name":"剪彩剪刀","location":"二楼仓库","initial_qty":2,"restock":0,"remaining_qty":0,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":0,"diff":-2,"claims":[],"location_group":"一厂"},{"name":"透明雨衣1","location":"餐厅12号柜","initial_qty":49,"restock":0,"remaining_qty":48,"restock_time":"","restock_qty":0,"claimed_qty":1,"price":"","count_qty":48,"diff":0,"claims":[{"qty":1,"purpose":"to：Nora","claimer":"丁亚辰","time":"2023.7.3"}],"location_group":"一厂"},{"name":"透明雨衣2","location":"办公室密码柜","initial_qty":40,"restock":0,"remaining_qty":3,"restock_time":"","restock_qty":0,"claimed_qty":30,"price":"","count_qty":3,"diff":-7,"claims":[{"qty":30,"purpose":"会议需要","claimer":"许婷","time":"2025.7.1"}],"location_group":"一厂"},{"name":"长柄雨伞（绿色）","location":"二楼仓库","initial_qty":2,"restock":0,"remaining_qty":2,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":2,"diff":0,"claims":[{"qty":0,"purpose":"","claimer":"","time":""}],"location_group":"一厂"},{"name":"长柄雨伞（透明）","location":"二楼仓库","initial_qty":20,"restock":0,"remaining_qty":0,"restock_time":"","restock_qty":0,"claimed_qty":20,"price":"","count_qty":0,"diff":0,"claims":[{"qty":20,"purpose":"行政","claimer":"张晓晟","time":"4.19"}],"location_group":"一厂"},{"name":"排插","location":"二楼仓库+HR1-2","initial_qty":4,"restock":0,"remaining_qty":4,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":4,"diff":0,"claims":[],"location_group":"一厂"},{"name":"考勤机","location":"餐厅12号柜","initial_qty":3,"restock":0,"remaining_qty":3,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":3,"diff":0,"claims":[],"location_group":"一厂"},{"name":"MT物料","location":"餐厅10号柜","initial_qty":1,"restock":0,"remaining_qty":1,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":1,"diff":0,"claims":[],"location_group":"一厂"},{"name":"TWI培训物料","location":"餐厅11号柜","initial_qty":1,"restock":0,"remaining_qty":1,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":1,"diff":0,"claims":[],"location_group":"一厂"},{"name":"游戏","location":"餐厅11柜","initial_qty":1,"restock":0,"remaining_qty":1,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":0,"diff":0,"claims":[],"location_group":"一厂"},{"name":"大骰子","location":"无锡三厂","initial_qty":2,"restock":0,"remaining_qty":0,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":0,"diff":0,"claims":[],"location_group":"三厂"},{"name":"小电人等立牌","location":"无锡三厂","initial_qty":19,"restock":0,"remaining_qty":0,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":0,"diff":0,"claims":[],"location_group":"三厂"}],"定制服装":[{"name":"白色卫衣","location":"餐厅12号柜","initial_qty":42,"restock":0,"remaining_qty":0,"restock_time":"","restock_qty":0,"claimed_qty":42,"price":"","count_qty":0,"diff":0,"claims":[{"qty":42,"purpose":"career days","claimer":"赵晨龙","time":"2023.05.10"}],"location_group":"一厂"},{"name":"黑色POLO衫","location":"餐厅12号柜","initial_qty":2,"restock":0,"remaining_qty":1,"restock_time":"","restock_qty":0,"claimed_qty":2,"price":"","count_qty":1,"diff":-1,"claims":[],"location_group":"一厂"},{"name":"白色POLO衫","location":"二楼仓库","initial_qty":56,"restock":0,"remaining_qty":0,"restock_time":"","restock_qty":0,"claimed_qty":56,"price":"","count_qty":0,"diff":0,"claims":[{"qty":56,"purpose":"工会","claimer":"文巍","time":""}],"location_group":"一厂"},{"name":"绿色POLO衫","location":"餐厅12号柜","initial_qty":36,"restock":0,"remaining_qty":35,"restock_time":"","restock_qty":0,"claimed_qty":36,"price":"","count_qty":35,"diff":-1,"claims":[],"location_group":"一厂"},{"name":"白色定制卫衣","location":"行政仓库","initial_qty":5,"restock":0,"remaining_qty":5,"restock_time":"","restock_qty":0,"claimed_qty":5,"price":"","count_qty":5,"diff":0,"claims":[],"location_group":"一厂"},{"name":"防风壳冲锋衣（女）紫色 ：M","location":"三厂仓库","initial_qty":3,"restock":0,"remaining_qty":0,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":0,"diff":0,"claims":[],"location_group":"三厂"},{"name":"防风壳冲锋衣（女）紫色 ：L","location":"三厂仓库","initial_qty":8,"restock":0,"remaining_qty":0,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":0,"diff":0,"claims":[],"location_group":"三厂"},{"name":"防风壳冲锋衣（女）紫色 ：XL","location":"三厂仓库","initial_qty":2,"restock":0,"remaining_qty":0,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":0,"diff":0,"claims":[],"location_group":"三厂"},{"name":"防风壳冲锋衣（男）米灰：M","location":"三厂仓库","initial_qty":1,"restock":0,"remaining_qty":0,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":0,"diff":0,"claims":[],"location_group":"三厂"},{"name":"防风壳冲锋衣（男）米灰：2XL","location":"三厂仓库","initial_qty":1,"restock":0,"remaining_qty":0,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":0,"diff":0,"claims":[],"location_group":"三厂"},{"name":"防风壳冲锋衣（男）米灰：3XL","location":"三厂仓库","initial_qty":1,"restock":0,"remaining_qty":0,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":0,"diff":0,"claims":[],"location_group":"三厂"},{"name":"防风壳冲锋衣（男）米白：2XL","location":"三厂仓库","initial_qty":5,"restock":0,"remaining_qty":0,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":0,"diff":0,"claims":[],"location_group":"三厂"},{"name":"防风壳冲锋衣（男）米白：3XL","location":"三厂仓库","initial_qty":5,"restock":0,"remaining_qty":0,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":0,"diff":0,"claims":[],"location_group":"三厂"}],"荣誉相关":[{"name":"叶子徽章（旧）","location":"办公室密码柜","initial_qty":72,"restock":100,"remaining_qty":0,"restock_time":"2023.6.8","restock_qty":50,"claimed_qty":10,"price":"","count_qty":0,"diff":0,"claims":[{"qty":10,"purpose":"","claimer":"Nora","time":"2023.03.27"},{"qty":36,"purpose":"","claimer":"赵晨龙","time":"2023.04.19"},{"qty":28,"purpose":"","claimer":"赵晨龙","time":"2023.5.30"},{"qty":9,"purpose":"补townhall礼品","claimer":"丁亚辰","time":"2023.7.11"},{"qty":31,"purpose":"townhall","claimer":"丁亚辰","time":"2023.10.12"},{"qty":1,"purpose":"","claimer":"terry","time":"2025.2.24"}],"location_group":"一厂"},{"name":"叶子挂绳（旧）","location":"办公室密码柜","initial_qty":71,"restock":120,"remaining_qty":0,"restock_time":"2023.6.12","restock_qty":70,"claimed_qty":36,"price":"","count_qty":0,"diff":0,"claims":[{"qty":36,"purpose":"","claimer":"赵晨龙","time":"2023.04.19"},{"qty":1,"purpose":"to：张晓晟","claimer":"邹小姣","time":"2023.04.12"},{"qty":1,"purpose":"to：Sarah","claimer":"丁亚辰","time":"2023.5.26"},{"qty":28,"purpose":"","claimer":"赵晨龙","time":"2023.5.30"},{"qty":1,"purpose":"to：张晓晟","claimer":"丁亚辰","time":"2023.6.12"},{"qty":9,"purpose":"补townhall礼品","claimer":"丁亚辰","time":"2023.7.11"},{"qty":31,"purpose":"townhall","claimer":"丁亚辰","time":"2023.10.12"},{"qty":1,"purpose":"","claimer":"Claire","time":"2024.4.29"}],"location_group":"一厂"},{"name":"黑色logo卡套（旧）","location":"办公室密码柜","initial_qty":108,"restock":120,"remaining_qty":0,"restock_time":"2023.6.15","restock_qty":70,"claimed_qty":36,"price":"","count_qty":0,"diff":0,"claims":[{"qty":36,"purpose":"","claimer":"赵晨龙","time":"2023.04.19"},{"qty":28,"purpose":"","claimer":"赵晨龙","time":"2023.5.30"},{"qty":1,"purpose":"to：张晓晟","claimer":"丁亚辰","time":"2023.6.12"},{"qty":9,"purpose":"补townhall礼品","claimer":"丁亚辰","time":"2023.7.11"},{"qty":31,"purpose":"townhall","claimer":"丁亚辰","time":"2023.10.12"}],"location_group":"一厂"},{"name":"递进桃徽章","location":"办公室密码柜","initial_qty":94,"restock":0,"remaining_qty":49,"restock_time":"","restock_qty":0,"claimed_qty":15,"price":"","count_qty":49,"diff":-10,"claims":[{"qty":15,"purpose":"","claimer":"数字化项目","time":"2023.02.27"},{"qty":10,"purpose":"","claimer":"Nora","time":"2023.03.27"},{"qty":10,"purpose":"优秀员工表彰","claimer":"林静","time":"2023.10.19"}],"location_group":"一厂"},{"name":"图书徽章","location":"办公室密码柜","initial_qty":52,"restock":0,"remaining_qty":0,"restock_time":"","restock_qty":0,"claimed_qty":24,"price":"","count_qty":0,"diff":-28,"claims":[{"qty":24,"purpose":"贵州交职院订单班入职仪式","claimer":"Rachel","time":"2024.7.10"},{"qty":24,"purpose":"贵州交职院订单班入职仪式，rachel领取","claimer":"","time":"7.10"}],"location_group":"一厂"},{"name":"灯塔徽章","location":"办公室密码柜","initial_qty":37,"restock":0,"remaining_qty":21,"restock_time":"","restock_qty":0,"claimed_qty":1,"price":"","count_qty":21,"diff":-14,"claims":[{"qty":1,"purpose":"to：张婷婷","claimer":"Sarah","time":"2025.2.24"},{"qty":1,"purpose":"For董小花","claimer":"娄振强","time":"2025.05.19"},{"qty":1,"purpose":"to张婷婷（备注：Sarah）","claimer":"","time":"2.17"},{"qty":1,"purpose":"For董小花（备注：娄振强）","claimer":"","time":"2025/5/19"}],"location_group":"一厂"},{"name":"雪梨徽章","location":"办公室密码柜","initial_qty":98,"restock":0,"remaining_qty":56,"restock_time":"","restock_qty":0,"claimed_qty":4,"price":"","count_qty":56,"diff":13,"claims":[{"qty":4,"purpose":"雪梨堂第一期毕业","claimer":"邹小姣","time":"2023.03.22"},{"qty":10,"purpose":"","claimer":"Nora","time":"2023.03.27"},{"qty":41,"purpose":"2024教师节表彰","claimer":"Rachel","time":"2024.9.10"}],"location_group":"一厂"},{"name":"长期服务卡套套装","location":"二楼仓库","initial_qty":32,"restock":0,"remaining_qty":32,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":32,"diff":0,"claims":[],"location_group":"一厂"},{"name":"大白图案卡套套装","location":"办公室密码柜","initial_qty":64,"restock":0,"remaining_qty":63,"restock_time":"","restock_qty":0,"claimed_qty":1,"price":"","count_qty":63,"diff":1,"claims":[{"qty":1,"purpose":"For董小花","claimer":"娄振强","time":"2025.05.13"},{"qty":1,"purpose":"","claimer":"","time":""}],"location_group":"一厂"},{"name":"白熊挂绳","location":"办公室密码柜","initial_qty":66,"restock":0,"remaining_qty":65,"restock_time":"","restock_qty":0,"claimed_qty":1,"price":"","count_qty":0,"diff":0,"claims":[{"qty":1,"purpose":"For董小花","claimer":"娄振强","time":"2025.05.13"},{"qty":1,"purpose":"","claimer":"","time":""}],"location_group":"一厂"},{"name":"认可包","location":"办公室B柜","initial_qty":25,"restock":100,"remaining_qty":0,"restock_time":"2023.6.30","restock_qty":100,"claimed_qty":1,"price":"","count_qty":0,"diff":-18,"claims":[{"qty":1,"purpose":"to zhangping","claimer":"邹小姣","time":"2023.03.17"},{"qty":24,"purpose":"","claimer":"赵晨龙","time":"2023.04.19"},{"qty":12,"purpose":"补townhall礼品","claimer":"丁亚辰","time":"2023.7.11"},{"qty":31,"purpose":"townhall","claimer":"丁亚辰","time":"2023.10.12"},{"qty":1,"purpose":"会议礼品","claimer":"Sarah","time":"2023.12.29"},{"qty":38,"purpose":"礼品","claimer":"Stephanie","time":"2024.3.12"},{"qty":0,"purpose":"","claimer":"","time":""},{"qty":44,"purpose":"Townhall认可","claimer":"","time":"5.8"},{"qty":9,"purpose":"MIA，范伟","claimer":"","time":"6.2"},{"qty":3,"purpose":"备注：石勇","claimer":"","time":"2025/6/6"},{"qty":1,"purpose":"","claimer":"","time":""}],"location_group":"一厂"},{"name":"认可包","location":"办公室C柜","initial_qty":16,"restock":40,"remaining_qty":6,"restock_time":"","restock_qty":0,"claimed_qty":12,"price":"","count_qty":6,"diff":-22,"claims":[{"qty":12,"purpose":"","claimer":"赵晨龙","time":"2023.04.19"},{"qty":4,"purpose":"","claimer":"赵晨龙","time":"2023.5.30"},{"qty":9,"purpose":"","claimer":"范伟","time":"2024.6.20"},{"qty":3,"purpose":"","claimer":"石勇","time":"2025.06.06"},{"qty":44,"purpose":"Townhall认可","claimer":"","time":"5.8"},{"qty":9,"purpose":"MIA，范伟","claimer":"","time":"6.2"},{"qty":3,"purpose":"备注：石勇","claimer":"","time":"2025/6/6"},{"qty":1,"purpose":"","claimer":"","time":""}],"location_group":"一厂"},{"name":"认可包","location":"HR1-4","initial_qty":14,"restock":0,"remaining_qty":0,"restock_time":"","restock_qty":0,"claimed_qty":14,"price":"","count_qty":0,"diff":0,"claims":[{"qty":14,"purpose":"","claimer":"赵晨龙","time":"2023.5.30"},{"qty":44,"purpose":"Townhall认可","claimer":"","time":"5.8"},{"qty":9,"purpose":"MIA，范伟","claimer":"","time":"6.2"},{"qty":3,"purpose":"备注：石勇","claimer":"","time":"2025/6/6"},{"qty":1,"purpose":"","claimer":"","time":""}],"location_group":"一厂"},{"name":"认可包（新）","location":"办公室A柜＋行政仓库","initial_qty":48,"restock":100,"remaining_qty":77,"restock_time":"2024.8.9","restock_qty":100,"claimed_qty":44,"price":"","count_qty":77,"diff":-5,"claims":[{"qty":44,"purpose":"Townhall","claimer":"Sarah","time":"2024.5.8"},{"qty":2,"purpose":"Wira、陆华到访","claimer":"娄振强","time":"2024.7.2"},{"qty":19,"purpose":"2024 Q2 Townhall","claimer":"Rachel","time":"2024.8.23"},{"qty":1,"purpose":"送内部客户","claimer":"陆青青","time":"2025.6.25"},{"qty":2,"purpose":"","claimer":"","time":"7.2"},{"qty":19,"purpose":"2024 Q2 Townhall","claimer":"","time":"8.23"},{"qty":1,"purpose":"","claimer":"","time":""}],"location_group":"一厂"},{"name":"WPF 集章卡","location":"办公室C柜","initial_qty":200,"restock":0,"remaining_qty":0,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":0,"diff":-200,"claims":[],"location_group":"一厂"},{"name":"SWD 集章卡","location":"办公室C柜","initial_qty":100,"restock":0,"remaining_qty":0,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":0,"diff":-100,"claims":[],"location_group":"一厂"},{"name":"WPF logo印章","location":"办公室C柜","initial_qty":2,"restock":0,"remaining_qty":1,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":1,"diff":-1,"claims":[],"location_group":"一厂"},{"name":"SWD logo印章","location":"办公室C柜","initial_qty":2,"restock":0,"remaining_qty":0,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":1,"diff":-1,"claims":[],"location_group":"一厂"},{"name":"叶子徽章","location":"餐厅11柜","initial_qty":54,"restock":200,"remaining_qty":172,"restock_time":"2024.7.15","restock_qty":200,"claimed_qty":42,"price":"","count_qty":172,"diff":-7,"claims":[{"qty":42,"purpose":"townhall","claimer":"Sarah","time":"2024.5.8"},{"qty":10,"purpose":"","claimer":"","time":"2024.5.8"},{"qty":19,"purpose":"2024 Q2 Townhall","claimer":"Rachel","time":"2024.8.23"},{"qty":4,"purpose":"Lighthouse演讲人","claimer":"张晓晟","time":"2024.10.15"},{"qty":1,"purpose":"","claimer":"Sarah","time":"2024.11.1"},{"qty":7,"purpose":"订单班拜师仪式","claimer":"Martin Wang","time":"2025.7.14"},{"qty":42,"purpose":"Townhall认可","claimer":"","time":"5.8"},{"qty":10,"purpose":"","claimer":"","time":"5.8"},{"qty":19,"purpose":"","claimer":"","time":""},{"qty":4,"purpose":"Lighthouse演讲人/张晓晟","claimer":"","time":"10.15"},{"qty":1,"purpose":"Sarah","claimer":"","time":"11.1"},{"qty":1,"purpose":"备注：Terry","claimer":"","time":"2.24"},{"qty":7,"purpose":"订单班拜师仪式（备注：Martin Wang）","claimer":"","time":"2025.7.14"}],"location_group":"一厂"},{"name":"黑色logo卡套","location":"餐厅11柜","initial_qty":85,"restock":200,"remaining_qty":124,"restock_time":"2024.7.15","restock_qty":200,"claimed_qty":41,"price":"","count_qty":124,"diff":-51,"claims":[{"qty":41,"purpose":"townhall","claimer":"Sarah","time":"2024.5.8"},{"qty":19,"purpose":"2024 Q2 Townhall","claimer":"Rachel","time":"2024.8.23"},{"qty":49,"purpose":"202503蓝领员工大会&锡达路员工大会","claimer":"Sarah","time":"2025.3.14"},{"qty":1,"purpose":"For董小花","claimer":"娄振强","time":"2025.05.13"},{"qty":1,"purpose":"ForTracy","claimer":"Sarah","time":"2025.07.29"},{"qty":1,"purpose":"For Steven","claimer":"张晓晟","time":"2025.08.01"},{"qty":19,"purpose":"","claimer":"","time":""},{"qty":49,"purpose":"","claimer":"","time":""},{"qty":1,"purpose":"For董小花（备注：娄振强）","claimer":"","time":"2025/5/13"},{"qty":1,"purpose":"For Tracy（备注：sarah）","claimer":"","time":"2025/7/29"},{"qty":1,"purpose":"For Steven（备注：张晓晟）","claimer":"","time":"2025/8/1"},{"qty":1,"purpose":"备注：张晓晟","claimer":"","time":"2026.8.13"},{"qty":41,"purpose":"Townhall认可","claimer":"","time":"5.8"}],"location_group":"一厂"},{"name":"叶子挂绳","location":"餐厅11柜","initial_qty":94,"restock":200,"remaining_qty":89,"restock_time":"2024.7.15","restock_qty":200,"claimed_qty":41,"price":"","count_qty":91,"diff":-94,"claims":[{"qty":41,"purpose":"townhall","claimer":"Sarah","time":"2024.5.8"},{"qty":19,"purpose":"2024 Q2 Townhall","claimer":"Rachel","time":"2024.8.23"},{"qty":49,"purpose":"202503蓝领员工大会&锡达路员工大会","claimer":"Sarah","time":"2025.3.14"},{"qty":1,"purpose":"","claimer":"Rachel","time":"2025.04.28"},{"qty":1,"purpose":"For董小花","claimer":"娄振强","time":"2025.05.13"},{"qty":1,"purpose":"For Tracy","claimer":"Sarah","time":"2025.07.29"},{"qty":1,"purpose":"For steven","claimer":"张晓晟","time":"2025.08.01"},{"qty":1,"purpose":"Claire","claimer":"","time":"4.29"},{"qty":19,"purpose":"","claimer":"","time":""},{"qty":49,"purpose":"","claimer":"","time":""},{"qty":1,"purpose":"备注：Rachel","claimer":"","time":"2025/4/28"},{"qty":1,"purpose":"","claimer":"","time":""},{"qty":1,"purpose":"备注：张晓晟","claimer":"","time":"2026\\6\\23"}],"location_group":"一厂"},{"name":"共筑蓝图徽章","location":"行政仓库","initial_qty":40,"restock":0,"remaining_qty":40,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":40,"diff":0,"claims":[],"location_group":"一厂"},{"name":"electrifier项目徽章（L1）","location":"办公室密码柜","initial_qty":295,"restock":0,"remaining_qty":295,"restock_time":"","restock_qty":0,"claimed_qty":10,"price":"","count_qty":0,"diff":0,"claims":[{"qty":10,"purpose":"专家领取","claimer":"Sarah","time":"2025.8.26"},{"qty":10,"purpose":"专家领取（备注：Sarah）","claimer":"","time":"2025.8.26"}],"location_group":"一厂"},{"name":"electrifier项目徽章（L2）","location":"办公室密码柜","initial_qty":21,"restock":0,"remaining_qty":21,"restock_time":"","restock_qty":0,"claimed_qty":5,"price":"","count_qty":0,"diff":0,"claims":[{"qty":5,"purpose":"专家领取","claimer":"Sarah","time":"2025.8.26"},{"qty":5,"purpose":"","claimer":"","time":""}],"location_group":"一厂"},{"name":"electrifier项目徽章（L3）","location":"办公室密码柜","initial_qty":2,"restock":0,"remaining_qty":2,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":0,"diff":0,"claims":[],"location_group":"一厂"},{"name":"Workshop TED Talk 小风扇","location":"办公室C柜","initial_qty":30,"restock":0,"remaining_qty":0,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":0,"diff":0,"claims":[],"location_group":"一厂"},{"name":"Workshop TED Talk 行李牌","location":"办公室C柜","initial_qty":30,"restock":0,"remaining_qty":0,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":0,"diff":0,"claims":[],"location_group":"一厂"},{"name":"TCP专家 鼠标垫","location":"办公室B柜","initial_qty":50,"restock":0,"remaining_qty":0,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":0,"diff":0,"claims":[],"location_group":"一厂"}],"员工服装":[{"name":"女M","location":"员工服装","initial_qty":5,"restock":0,"remaining_qty":3,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":3,"diff":0,"claims":[],"location_group":"一厂"},{"name":"女L","location":"员工服装","initial_qty":5,"restock":0,"remaining_qty":6,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":6,"diff":0,"claims":[],"location_group":"一厂"},{"name":"女XL","location":"员工服装","initial_qty":5,"restock":0,"remaining_qty":3,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":3,"diff":0,"claims":[],"location_group":"一厂"},{"name":"男2XL","location":"员工服装","initial_qty":5,"restock":0,"remaining_qty":5,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":5,"diff":0,"claims":[],"location_group":"一厂"},{"name":"男3XL","location":"员工服装","initial_qty":5,"restock":0,"remaining_qty":5,"restock_time":"","restock_qty":0,"claimed_qty":0,"price":"","count_qty":5,"diff":0,"claims":[],"location_group":"一厂"}]};
+
+let currentCategory = '礼品';
+let workData = ALL_DATA[currentCategory];
+let exportSelected = new Set();
+let exportSelectedItems = [];
+let currentExportData = [];
+let showOnlySelected = false;
+let opLog = [];
+const STORAGE_KEY = 'hr_gift_inventory_v15';
+
+// Load from localStorage
+function loadFromStorage() {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+      const obj = JSON.parse(saved);
+      if (obj.data && typeof obj.data === 'object') {
+        for (const cat in obj.data) { if (ALL_DATA[cat]) ALL_DATA[cat] = obj.data[cat]; }
+      }
+      if (obj.log && Array.isArray(obj.log)) opLog = obj.log;
+      if (obj.category && ALL_DATA[obj.category]) currentCategory = obj.category;
+    }
+  } catch(e) {}
+  workData = ALL_DATA[currentCategory];
+}
+function saveToStorage() {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify({data: ALL_DATA, log: opLog, category: currentCategory})); } catch(e) {}
+}
+
+// ============ UTILS ============
+function parseNum(v) { if (v === '' || v === null || v === undefined) return null; const n = Number(v); return isNaN(n) ? null : n; }
+function fmt(v) { return (v === '' || v === null || v === undefined) ? '-' : v; }
+
+// 统一日期显示为 xxxx/xx/xx，底层数据不变
+function formatDate(v) {
+  if (v === '' || v === null || v === undefined) return '-';
+  let s = String(v).trim();
+  if (!s) return '-';
+  // Excel 序列号（5位纯数字，如 44984）
+  if (/^\d{5}$/.test(s)) {
+    const d = new Date((parseInt(s) - 25569) * 86400000);
+    return d.getUTCFullYear() + '/' + String(d.getUTCMonth()+1).padStart(2,'0') + '/' + String(d.getUTCDate()).padStart(2,'0');
+  }
+  // 统一分隔符为 /
+  s = s.replace(/[.\-]/g, '/');
+  // 笔误修正：20261/7 → 2026/1/7
+  let m = s.match(/^(\d{4})(\d{1})\/(\d{1,2})$/);
+  if (m) return m[1] + '/' + m[2].padStart(2,'0') + '/' + m[3].padStart(2,'0');
+  // yyyy/m/d
+  m = s.match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})/);
+  if (m) return m[1] + '/' + m[2].padStart(2,'0') + '/' + m[3].padStart(2,'0');
+  // yyyy/m（只有年月）
+  m = s.match(/^(\d{4})\/(\d{1,2})$/);
+  if (m) return m[1] + '/' + m[2].padStart(2,'0') + '/--';
+  // m/d（只有月日，补当前年）
+  m = s.match(/^(\d{1,2})\/(\d{1,2})$/);
+  if (m) return new Date().getFullYear() + '/' + m[1].padStart(2,'0') + '/' + m[2].padStart(2,'0');
+  // 尝试原生解析
+  const d = new Date(s);
+  if (!isNaN(d.getTime())) return d.getFullYear() + '/' + String(d.getMonth()+1).padStart(2,'0') + '/' + String(d.getDate()).padStart(2,'0');
+  return s;
+}
+function diffClass(v) { const n = parseNum(v); if (n === null) return 'diff-zero'; if (n > 0) return 'diff-pos'; if (n < 0) return 'diff-neg'; return 'diff-zero'; }
+function showToast(msg, isError) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show' + (isError ? ' error' : '');
+  setTimeout(() => t.className = 'toast', 2500);
+}
+function addLog(type, detail) {
+  const time = new Date().toLocaleString('zh-CN');
+  opLog.unshift({ time, type, detail });
+  if (opLog.length > 200) opLog = opLog.slice(0, 200);
+  saveToStorage();
+  renderLog();
+}
+
+// ============ TABS ============
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById(tab.dataset.tab).classList.add('active');
+    if (tab.dataset.tab === 'tab2') renderFilterTable(workData);
+    if (tab.dataset.tab === 'tab3') { initProductSelects(); renderLog(); }
+    if (tab.dataset.tab === 'tab4') { initExportLocations(); previewExport(); }
+  });
+});
+
+// Category tabs
+document.querySelectorAll('.cat-tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    switchCategory(tab.dataset.cat);
+  });
+});
+
+// 导出品类checkbox变化时更新位置下拉
+document.querySelectorAll('#e_categories input').forEach(cb => {
+  cb.addEventListener('change', () => { initExportLocations(); previewExport(); });
+});
+
+function switchCategory(cat) {
+  if (!ALL_DATA[cat]) return;
+  currentCategory = cat;
+  workData = ALL_DATA[cat];
+  document.querySelectorAll('.cat-tab').forEach(t => t.classList.toggle('active', t.dataset.cat === cat));
+  // 同步导出品类勾选：只选中当前品类
+  document.querySelectorAll('#e_categories input').forEach(cb => { cb.checked = (cb.value === cat); });
+  renderStats();
+  const activeLoc = document.querySelector('.loc-tab.active')?.dataset.loc || 'all';
+  renderTab1(activeLoc);
+  initFilterLocations();
+  initProductSelects();
+  initExportLocations();
+  previewExport();
+  // 重置筛选输入
+  ['f_name','f_pmin','f_pmax','f_rmin','f_rmax','e_name','e_pmin','e_pmax','e_rmin','e_rmax'].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
+  document.getElementById('f_group').value=''; document.getElementById('f_location').value='';
+  document.getElementById('e_group').value=''; document.getElementById('e_location').value='';
+  renderFilterTable(workData);
+  saveToStorage();
+}
+
+// Location sub-tabs in tab1
+function switchLocTab(el, loc) {
+  document.querySelectorAll('.loc-tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  renderTab1(loc);
+}
+document.querySelectorAll('.loc-tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.loc-tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    renderTab1(tab.dataset.loc);
+  });
+});
+
+// ============ TAB 1 ============
+function renderStats() {
+  const total = workData.length;
+  const yi = workData.filter(p => p.location_group === '一厂');
+  const san = workData.filter(p => p.location_group === '三厂');
+  const sum = arr => arr.reduce((s,p) => s + (typeof p.remaining_qty === 'number' ? p.remaining_qty : 0), 0);
+  const priced = workData.filter(p => p.price !== '' && p.price !== null && p.price !== 0);
+  document.getElementById('statsRow').innerHTML = `
+    <div class="stat-card"><div class="label">商品总数</div><div class="value">${total}</div></div>
+    <div class="stat-card"><div class="label">一厂商品数</div><div class="value green">${yi.length}</div></div>
+    <div class="stat-card"><div class="label">三厂商品数</div><div class="value orange">${san.length}</div></div>
+    <div class="stat-card"><div class="label">总剩余数量</div><div class="value">${sum(workData)}</div></div>
+    <div class="stat-card"><div class="label">一厂剩余</div><div class="value green">${sum(yi)}</div></div>
+    <div class="stat-card"><div class="label">三厂剩余</div><div class="value orange">${sum(san)}</div></div>
+    <div class="stat-card"><div class="label">有定价商品</div><div class="value">${priced.length}</div></div>
+  `;
+}
+
+function renderTab1(locFilter) {
+  let data = workData;
+  let title = '仓库商品清单';
+  if (locFilter && locFilter !== 'all') {
+    data = workData.filter(p => p.location_group === locFilter);
+    title = locFilter + '仓库商品清单';
+  }
+  document.getElementById('tab1Title').textContent = title;
+  document.getElementById('tab1Count').textContent = data.length + ' 项';
+
+  const tbody = document.getElementById('tab1Body');
+  if (data.length === 0) { tbody.innerHTML = '<tr><td colspan="12" class="empty">暂无数据</td></tr>'; return; }
+
+  tbody.innerHTML = data.map((p, idx) => {
+    const claimsHtml = p.claims && p.claims.length ? `
+      <tr class="claim-detail" id="cd_${idx}"><td colspan="10">
+        <table><thead><tr><th>领取数量</th><th>用途</th><th>领取人</th><th>时间</th></tr></thead>
+        <tbody>${p.claims.map(c => `<tr><td>${fmt(c.qty)}</td><td>${fmt(c.purpose)}</td><td>${fmt(c.claimer)}</td><td>${formatDate(c.time)}</td></tr>`).join('')}</tbody>
+        </table>
+      </td></tr>` : '';
+    return `<tr>
+      <td>${fmt(p.name)}</td>
+      <td>${fmt(p.location)}</td>
+      <td class="num">${fmt(p.initial_qty)}</td>
+      <td class="num">${fmt(p.restock)}</td>
+      <td class="col-date">${formatDate(p.restock_time)}</td>
+      <td class="num">${fmt(p.claimed_qty)}</td>
+      <td class="num" style="font-weight:600;color:#1a5276;">${fmt(p.remaining_qty)}</td>
+      <td class="num">${fmt(p.price)}</td>
+      <td class="num ${diffClass(p.diff)}">${fmt(p.diff)}</td>
+      <td>${p.claims && p.claims.length ? `<span class="claim-toggle" onclick="var el=document.getElementById('cd_${idx}');el.classList.toggle('show');this.textContent=el.classList.contains('show')?'收起':'查看(${p.claims.length})'">查看(${p.claims.length})</span>` : '-'}</td>
+    </tr>${claimsHtml}`;
+  }).join('');
+}
+
+// ============ TAB 2 ============
+function initFilterLocations() {
+  const locs = [...new Set(workData.map(p => p.location).filter(Boolean))].sort();
+  const sel = document.getElementById('f_location');
+  sel.innerHTML = '<option value="">全部</option>' + locs.map(l => `<option value="${l}">${l}</option>`).join('');
+}
+
+function getFiltered() {
+  const name = document.getElementById('f_name').value.toLowerCase();
+  const group = document.getElementById('f_group').value;
+  const loc = document.getElementById('f_location').value;
+  const pMin = parseNum(document.getElementById('f_pmin').value);
+  const pMax = parseNum(document.getElementById('f_pmax').value);
+  const rMin = parseNum(document.getElementById('f_rmin').value);
+  const rMax = parseNum(document.getElementById('f_rmax').value);
+  return workData.filter(p => {
+    if (name && !p.name.toLowerCase().includes(name)) return false;
+    if (group && p.location_group !== group) return false;
+    if (loc && p.location !== loc) return false;
+    const pv = parseNum(p.price);
+    if (pMin !== null && (pv === null || pv < pMin)) return false;
+    if (pMax !== null && (pv === null || pv > pMax)) return false;
+    const rv = parseNum(p.remaining_qty);
+    if (rMin !== null && (rv === null || rv < rMin)) return false;
+    if (rMax !== null && (rv === null || rv > rMax)) return false;
+    return true;
+  });
+}
+
+function applyFilter() { renderFilterTable(getFiltered()); }
+function resetFilter() {
+  ['f_name','f_pmin','f_pmax','f_rmin','f_rmax'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('f_group').value = '';
+  document.getElementById('f_location').value = '';
+  renderFilterTable(workData);
+}
+
+function renderFilterTable(data) {
+  document.getElementById('f_count').textContent = data.length + ' 项';
+  const tbody = document.getElementById('filterBody');
+  if (data.length === 0) { tbody.innerHTML = '<tr><td colspan="11" class="empty">无符合条件的数据</td></tr>'; return; }
+  tbody.innerHTML = data.map((p, idx) => {
+    const fid = 'fcd_' + idx;
+    const claimsHtml = p.claims && p.claims.length ? `
+      <tr class="claim-detail" id="${fid}"><td colspan="11">
+        <table><thead><tr><th>领取数量</th><th>用途</th><th>领取人</th><th>时间</th></tr></thead>
+        <tbody>${p.claims.map(c => `<tr><td>${fmt(c.qty)}</td><td>${fmt(c.purpose)}</td><td>${fmt(c.claimer)}</td><td>${formatDate(c.time)}</td></tr>`).join('')}</tbody>
+        </table>
+      </td></tr>` : '';
+    return `<tr>
+    <td>${fmt(p.name)}</td><td>${fmt(p.location_group)}</td><td>${fmt(p.location)}</td>
+    <td class="num">${fmt(p.initial_qty)}</td><td class="num">${fmt(p.restock)}</td>
+    <td class="col-date">${formatDate(p.restock_time)}</td>
+    <td class="num">${fmt(p.claimed_qty)}</td>
+    <td class="num" style="font-weight:600;">${fmt(p.remaining_qty)}</td><td class="num">${fmt(p.price)}</td>
+    <td class="num ${diffClass(p.diff)}">${fmt(p.diff)}</td>
+    <td>${p.claims && p.claims.length ? `<span class="claim-toggle" onclick="var el=document.getElementById('${fid}');el.classList.toggle('show');this.textContent=el.classList.contains('show')?'收起':'查看(${p.claims.length})'">查看(${p.claims.length})</span>` : '-'}</td>
+  </tr>${claimsHtml}`;}).join('');
+}
+
+// ============ TAB 3 ============
+function initProductSelects() {
+  const opts = workData.map((p,i) => `<option value="${i}">${p.name} (${p.location}) 剩余:${p.remaining_qty}</option>`).join('');
+  document.getElementById('r_product').innerHTML = opts;
+  document.getElementById('o_product').innerHTML = opts;
+  // 清空搜索框
+  const rSearch = document.getElementById('r_search');
+  const oSearch = document.getElementById('o_search');
+  if (rSearch) rSearch.value = '';
+  if (oSearch) oSearch.value = '';
+  updateRInfo(); updateOInfo();
+}
+
+function filterProductSelect(type) {
+  const keyword = document.getElementById(type + '_search').value.trim().toLowerCase();
+  const select = document.getElementById(type + '_product');
+  const opts = workData.map((p,i) => {
+    if (!keyword || p.name.toLowerCase().includes(keyword) || (p.location && p.location.toLowerCase().includes(keyword))) {
+      return `<option value="${i}">${p.name} (${p.location}) 剩余:${p.remaining_qty}</option>`;
+    }
+    return '';
+  }).join('');
+  select.innerHTML = opts;
+  if (type === 'r') updateRInfo();
+  else updateOInfo();
+}
+
+function updateRInfo() {
+  const idx = document.getElementById('r_product').value;
+  const p = workData[idx];
+  if (p) document.getElementById('r_info').textContent = `当前：${p.name} | 位置：${p.location} | 初始：${p.initial_qty} | 已补货：${p.restock} | 剩余：${p.remaining_qty}`;
+}
+function updateOInfo() {
+  const idx = document.getElementById('o_product').value;
+  const p = workData[idx];
+  if (p) document.getElementById('o_info').textContent = `当前：${p.name} | 位置：${p.location} | 剩余：${p.remaining_qty}`;
+}
+
+document.getElementById('r_product').addEventListener('change', updateRInfo);
+document.getElementById('o_product').addEventListener('change', updateOInfo);
+
+function doRestock() {
+  const idx = document.getElementById('r_product').value;
+  const qty = parseNum(document.getElementById('r_qty').value);
+  const date = document.getElementById('r_date').value;
+  if (!qty || qty <= 0) { showToast('请输入有效的补货数量', true); return; }
+  const p = workData[idx];
+  p.restock = (parseNum(p.restock)||0) + qty;
+  p.remaining_qty = (parseNum(p.remaining_qty)||0) + qty;
+  p.restock_qty = (parseNum(p.restock_qty)||0) + qty;
+  if (date) p.restock_time = date;
+  document.getElementById('r_qty').value = '';
+  addLog('补货', `${p.name} 补货 ${qty} 件，剩余更新为 ${p.remaining_qty}`);
+  showToast(`补货成功：${p.name} +${qty}`);
+  refreshAll();
+}
+
+function doClaim() {
+  const idx = document.getElementById('o_product').value;
+  const qty = parseNum(document.getElementById('o_qty').value);
+  const claimer = document.getElementById('o_claimer').value.trim();
+  const purpose = document.getElementById('o_purpose').value.trim();
+  const date = document.getElementById('o_date').value;
+  if (!qty || qty <= 0) { showToast('请输入有效的领取数量', true); return; }
+  const p = workData[idx];
+  const rem = parseNum(p.remaining_qty)||0;
+  if (qty > rem) { showToast(`库存不足！当前剩余 ${rem} 件`, true); return; }
+  p.remaining_qty = rem - qty;
+  p.claimed_qty = (parseNum(p.claimed_qty)||0) + qty;
+  p.claims = p.claims || [];
+  p.claims.unshift({ qty, purpose: purpose || '-', claimer: claimer || '-', time: date || new Date().toISOString().slice(0,10) });
+  document.getElementById('o_qty').value = '';
+  document.getElementById('o_claimer').value = '';
+  document.getElementById('o_purpose').value = '';
+  addLog('出库', `${p.name} 领取 ${qty} 件，领取人：${claimer||'-'}，用途：${purpose||'-'}，剩余更新为 ${p.remaining_qty}`);
+  showToast(`出库成功：${p.name} -${qty}`);
+  refreshAll();
+}
+
+function renderLog() {
+  const el = document.getElementById('logList');
+  if (opLog.length === 0) { el.innerHTML = '<div class="empty">暂无操作记录</div>'; return; }
+  el.innerHTML = opLog.map(l => `<div style="padding:6px 0;border-bottom:1px solid #eee;">
+    <span style="color:#999;font-size:12px;">${l.time}</span>
+    <span style="display:inline-block;width:50px;text-align:center;background:${l.type==='补货'?'#27ae60':'#e67e22'};color:#fff;font-size:11px;padding:1px 8px;border-radius:4px;margin:0 8px;">${l.type}</span>
+    ${l.detail}
+  </div>`).join('');
+}
+function clearLog() { opLog = []; saveToStorage(); renderLog(); showToast('日志已清空'); }
+
+function refreshAll() {
+  saveToStorage();
+  renderStats();
+  const activeLoc = document.querySelector('.loc-tab.active')?.dataset.loc || 'all';
+  renderTab1(activeLoc);
+  initProductSelects();
+}
+
+// ============ TAB 4 ============
+function initExportLocations() {
+  const checkedCats = Array.from(document.querySelectorAll('#e_categories input:checked')).map(cb => cb.value);
+  const cats = checkedCats.length ? checkedCats : [currentCategory];
+  let merged = [];
+  cats.forEach(cat => { if (ALL_DATA[cat]) merged = merged.concat(ALL_DATA[cat]); });
+  const locs = [...new Set(merged.map(p => p.location).filter(Boolean))].sort();
+  document.getElementById('e_location').innerHTML = '<option value="">全部</option>' + locs.map(l => `<option value="${l}">${l}</option>`).join('');
+}
+
+function onExportCategoryChange() {
+  initExportLocations();
+  previewExport();
+}
+
+function getExportFiltered() {
+  // 收集选中的品类
+  const checkedCats = Array.from(document.querySelectorAll('#e_categories input:checked')).map(cb => cb.value);
+  const cats = checkedCats.length ? checkedCats : [currentCategory];
+  // 合并多品类数据，并打上 category 标签
+  let merged = [];
+  cats.forEach(cat => {
+    if (ALL_DATA[cat]) {
+      ALL_DATA[cat].forEach(p => {
+        merged.push({...p, _category: cat});
+      });
+    }
+  });
+  const name = document.getElementById('e_name').value.toLowerCase();
+  const group = document.getElementById('e_group').value;
+  const loc = document.getElementById('e_location').value;
+  const pMin = parseNum(document.getElementById('e_pmin').value);
+  const pMax = parseNum(document.getElementById('e_pmax').value);
+  const rMin = parseNum(document.getElementById('e_rmin').value);
+  const rMax = parseNum(document.getElementById('e_rmax').value);
+  return merged.filter(p => {
+    if (name && !p.name.toLowerCase().includes(name)) return false;
+    if (group && p.location_group !== group) return false;
+    if (loc && p.location !== loc) return false;
+    const pv = parseNum(p.price);
+    if (pMin !== null && (pv === null || pv < pMin)) return false;
+    if (pMax !== null && (pv === null || pv > pMax)) return false;
+    const rv = parseNum(p.remaining_qty);
+    if (rMin !== null && (rv === null || rv < rMin)) return false;
+    if (rMax !== null && (rv === null || rv > rMax)) return false;
+    return true;
+  });
+}
+
+function previewExport() {
+  let data = getExportFiltered();
+  // 如果开启了"仅看勾选"，显示所有已勾选商品（跨筛选/跨品类）
+  if (showOnlySelected) {
+    data = exportSelectedItems.slice();
+  }
+  currentExportData = data;
+  document.getElementById('e_count').textContent = data.length + ' 项' + (exportSelectedItems.length > 0 ? '（已勾选 ' + exportSelectedItems.length + ' 项）' : '');
+  const tbody = document.getElementById('exportBody');
+  if (data.length === 0) { tbody.innerHTML = '<tr><td colspan="12" class="empty">无符合条件的数据</td></tr>'; return; }
+  tbody.innerHTML = data.map((p, i) => {
+    const key = p._category + '||' + p.name + '||' + p.location;
+    const checked = exportSelected.has(key) ? 'checked' : '';
+    return `<tr>
+    <td style="text-align:center;"><input type="checkbox" class="export-row-check" data-key="${key}" ${checked} onchange="toggleExportItem(this)"></td>
+    <td>${fmt(p._category || '')}</td><td>${fmt(p.name)}</td><td>${fmt(p.location_group)}</td><td>${fmt(p.location)}</td>
+    <td class="num">${fmt(p.initial_qty)}</td><td class="num">${fmt(p.restock)}</td>
+    <td class="col-date">${formatDate(p.restock_time)}</td>
+    <td class="num">${fmt(p.claimed_qty)}</td><td class="num">${fmt(p.remaining_qty)}</td>
+    <td class="num">${fmt(p.price)}</td>
+    <td class="num ${diffClass(p.diff)}">${fmt(p.diff)}</td>
+  </tr>`;}).join('');
+  // 更新全选状态
+  const allCb = document.getElementById('exportSelectAll');
+  if (allCb) allCb.checked = data.length > 0 && data.every(p => exportSelected.has(p._category + '||' + p.name + '||' + p.location));
+}
+
+function toggleExportItem(cb) {
+  const key = cb.dataset.key;
+  if (cb.checked) {
+    exportSelected.add(key);
+    // 从当前预览数据中找到商品并保存完整数据
+    const item = currentExportData.find(p => (p._category + '||' + p.name + '||' + p.location) === key);
+    if (item && !exportSelectedItems.find(x => (x._category + '||' + x.name + '||' + x.location) === key)) {
+      exportSelectedItems.push(JSON.parse(JSON.stringify(item)));
+    }
+  } else {
+    exportSelected.delete(key);
+    exportSelectedItems = exportSelectedItems.filter(x => (x._category + '||' + x.name + '||' + x.location) !== key);
+  }
+  updateExportBadge();
+  // 更新全选状态
+  const allCb = document.getElementById('exportSelectAll');
+  const checks = document.querySelectorAll('.export-row-check');
+  if (allCb && checks.length > 0) allCb.checked = Array.from(checks).every(c => c.checked);
+}
+
+function toggleSelectAllExport(cb) {
+  const checks = document.querySelectorAll('.export-row-check');
+  checks.forEach(c => {
+    c.checked = cb.checked;
+    const key = c.dataset.key;
+    if (cb.checked) {
+      exportSelected.add(key);
+      const item = currentExportData.find(p => (p._category + '||' + p.name + '||' + p.location) === key);
+      if (item && !exportSelectedItems.find(x => (x._category + '||' + x.name + '||' + x.location) === key)) {
+        exportSelectedItems.push(JSON.parse(JSON.stringify(item)));
+      }
+    } else {
+      exportSelected.delete(key);
+      exportSelectedItems = exportSelectedItems.filter(x => (x._category + '||' + x.name + '||' + x.location) !== key);
+    }
+  });
+  updateExportBadge();
+}
+
+function clearExportSelection() {
+  exportSelected.clear();
+  exportSelectedItems = [];
+  document.querySelectorAll('.export-row-check').forEach(c => c.checked = false);
+  const allCb = document.getElementById('exportSelectAll');
+  if (allCb) allCb.checked = false;
+  updateExportBadge();
+  // 如果当前是"仅看勾选"模式，切回全部
+  if (showOnlySelected) {
+    showOnlySelected = false;
+    document.getElementById('toggleSelectedBtn').textContent = '仅看勾选';
+    previewExport();
+  }
+}
+
+function updateExportBadge() {
+  const countEl = document.getElementById('e_count');
+  if (countEl) {
+    const baseCount = currentExportData.length;
+    countEl.textContent = baseCount + ' 项' + (exportSelectedItems.length > 0 ? '（已勾选 ' + exportSelectedItems.length + ' 项）' : '');
+  }
+}
+
+function toggleShowSelected() {
+  showOnlySelected = !showOnlySelected;
+  const btn = document.getElementById('toggleSelectedBtn');
+  if (btn) btn.textContent = showOnlySelected ? '显示全部' : '仅看勾选';
+  previewExport();
+}
+
+function showExportModal() { document.getElementById('exportModal').classList.add('show'); }
+function closeModal() { document.getElementById('exportModal').classList.remove('show'); }
+function confirmExport() { closeModal(); exportExcel(); }
+
+function exportExcel() {
+  let data;
+  // 如果有勾选，直接用保存的勾选商品（跨搜索/跨品类保留）
+  if (exportSelectedItems.length > 0) {
+    data = exportSelectedItems.slice();
+  } else {
+    data = getExportFiltered();
+  }
+  if (data.length === 0) { alert('没有可导出的数据'); return; }
+
+  const headers = ['品类','商品名称','位置分组','具体位置','初始数量','补货','补货时间','领取数量','最新剩余数量','价格','盘点与表差额'];
+  
+  // 构建Excel数据
+  const excelData = [headers];
+  data.forEach(function(p) {
+    excelData.push([
+      p._category || '',
+      p.name || '',
+      p.location_group || '',
+      p.location || '',
+      p.initial_qty !== null && p.initial_qty !== undefined ? p.initial_qty : '',
+      p.restock !== null && p.restock !== undefined ? p.restock : '',
+      formatDate(p.restock_time),
+      p.claimed_qty !== null && p.claimed_qty !== undefined ? p.claimed_qty : '',
+      p.remaining_qty !== null && p.remaining_qty !== undefined ? p.remaining_qty : '',
+      p.price !== null && p.price !== undefined && p.price !== '' ? p.price : '',
+      p.diff !== null && p.diff !== undefined ? p.diff : ''
+    ]);
+  });
+
+  // 创建工作簿
+  const ws = XLSX.utils.aoa_to_sheet(excelData);
+  
+  // 设置列宽
+  ws['!cols'] = [
+    {wch: 10}, {wch: 30}, {wch: 10}, {wch: 15},
+    {wch: 10}, {wch: 8}, {wch: 12}, {wch: 10},
+    {wch: 12}, {wch: 10}, {wch: 12}
+  ];
+  
+  // 设置表头样式（通过行高）
+  ws['!rows'] = [{hpt: 20}];
+  
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, '仓库礼品清单');
+  
+  // 导出文件
+  const fileName = 'HR仓库礼品清单_' + new Date().toISOString().slice(0,10) + '.xlsx';
+  XLSX.writeFile(wb, fileName);
+}
+
+// ============ INIT ============
+loadFromStorage();
+// 恢复品类标签状态
+document.querySelectorAll('.cat-tab').forEach(t => t.classList.toggle('active', t.dataset.cat === currentCategory));
+renderStats();
+renderTab1('all');
+initFilterLocations();
+initProductSelects();
+initExportLocations();
+previewExport();
+renderFilterTable(workData);
+const _now = new Date();
+const today = _now.getFullYear() + '/' + String(_now.getMonth()+1).padStart(2,'0') + '/' + String(_now.getDate()).padStart(2,'0');
+document.getElementById('r_date').value = today;
+document.getElementById('o_date').value = today;
+
+</script>
+</body>
+</html>
